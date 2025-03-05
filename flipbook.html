@@ -5,23 +5,22 @@
   <title>Flipbook Redirect</title>
   <script>
     function isMobileDevice() {
-      // Basic user agent check
       return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i
         .test(navigator.userAgent);
     }
 
     window.onload = function() {
-      // If user is on mobile, go to flipbook-mobile.html
       if (isMobileDevice()) {
+        // If mobile, redirect to flipbook-mobile.html
         window.location.href = "flipbook-mobile.html" + window.location.search;
       } else {
-        // Otherwise, go to flipbook-desktop.html
+        // Otherwise, flipbook-desktop.html
         window.location.href = "flipbook-desktop.html" + window.location.search;
       }
     };
   </script>
 </head>
 <body>
-  <!-- Optional: A quick "Loading..." or blank page while redirecting -->
+  <!-- Optional: A quick "Loading..." or blank screen while redirecting -->
 </body>
 </html>
