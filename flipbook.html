@@ -11,96 +11,159 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
   <!-- PDF.js worker -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js"></script>
+
   <style>
     body {
       background: #333;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
       margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      color: #fff;
     }
+
+    /* Navigation buttons */
+    .nav-buttons {
+      margin: 10px;
+    }
+    .nav-buttons button {
+      margin: 0 5px;
+      padding: 8px 16px;
+      font-size: 1em;
+      cursor: pointer;
+    }
+
+    /* Flipbook container; dimensions will be set dynamically in JS */
     #flipbook {
-      width: 800px;
-      height: 600px;
+      background: #999; /* just for visual reference */
+      margin: 0 auto;
     }
+
     .page {
-      width: 400px;
-      height: 600px;
-      background: white;
+      background: #fff;
       overflow: hidden;
+    }
+
+    /* Optional: Make the page container more responsive */
+    @media (max-width: 768px) {
+      body {
+        justify-content: flex-start;
+      }
     }
   </style>
 </head>
 <body>
+
+  <!-- Navigation Buttons -->
+  <div class="nav-buttons">
+    <button id="prevPage">Previous</button>
+    <button id="nextPage">Next</button>
+  </div>
+
   <!-- Container for the flipbook -->
   <div id="flipbook"></div>
 
   <script>
-    // Utility function to get URL query parameters
+    // Utility to get URL query parameters
     function getQueryParam(param) {
       const params = new URLSearchParams(window.location.search);
       return params.get(param);
     }
 
-    // Get the PDF filename from the 'pdf' query parameter
-    // Fallback to a default PDF if none is provided
-    const pdfUrl = getQueryParam("pdf") || "Tri-City%20Pickle%20Ball%20Courts.pdf";
-
-    // Configure PDF.js worker (ensure the version matches the one in the script tags)
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js";
-
     let pdfDoc = null;
     let numPages = 0;
 
-    // Load the PDF document using PDF.js
-    pdfjsLib.getDocument(pdfUrl).promise.then(function (pdf) {
-      pdfDoc = pdf;
-      numPages = pdf.numPages;
+    // Grab PDF filename from ?pdf= in the URL, or default to Tri-City...
+    const pdfUrl = getQueryParam("pdf") || "Tri-City%20Pickle%20Ball%20Courts.pdf";
 
-      // Create a div for each page in the PDF
-      for (let i = 1; i <= numPages; i++) {
-        const pageDiv = document.createElement("div");
-        pageDiv.className = "page";
-        pageDiv.id = "page-" + i;
-        document.getElementById("flipbook").appendChild(pageDiv);
-        renderPage(i);
-      }
+    // PDF.js worker config
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js";
 
-      // Initialize turn.js to create the flipbook effect
-      $("#flipbook").turn({
-        width: 800,
-        height: 600,
-        autoCenter: true,
-      });
-    }).catch(function (error) {
-      console.error("Error loading PDF:", error);
-    });
-
-    // Render a single PDF page into a canvas
-    function renderPage(pageNumber) {
-      pdfDoc.getPage(pageNumber).then(function (page) {
-        const scale = 1.5; // Adjust scale as needed
+    // Load the PDF, then figure out the page dimensions so we can size #flipbook
+    pdfjsLib.getDocument(pdfUrl).promise
+      .then(function(pdf) {
+        pdfDoc = pdf;
+        numPages = pdf.numPages;
+        // Get the first page to measure its size
+        return pdf.getPage(1);
+      })
+      .then(function(page) {
+        const scale = 1.5; // Adjust if you want bigger or smaller pages
         const viewport = page.getViewport({ scale: scale });
+        const pageWidth = viewport.width;
+        const pageHeight = viewport.height;
 
-        // Create a canvas element
+        // For a 2-page spread, total width is double the page width
+        // (turn.js shows two pages side by side).
+        let flipbookWidth = pageWidth * 2;
+        let flipbookHeight = pageHeight;
+
+        // Make it responsive if the screen is too narrow
+        // e.g., limit width to 90% of the viewport
+        const maxWidth = window.innerWidth * 0.9;
+        if (flipbookWidth > maxWidth) {
+          const ratio = maxWidth / flipbookWidth;
+          flipbookWidth *= ratio;
+          flipbookHeight *= ratio;
+        }
+
+        // Apply the dimensions to #flipbook
+        const flipbookDiv = document.getElementById("flipbook");
+        flipbookDiv.style.width = flipbookWidth + "px";
+        flipbookDiv.style.height = flipbookHeight + "px";
+
+        // Now create divs for all pages and render them
+        for (let i = 1; i <= numPages; i++) {
+          const pageDiv = document.createElement("div");
+          pageDiv.className = "page";
+          pageDiv.id = "page-" + i;
+          pageDiv.style.width = (flipbookWidth / 2) + "px"; // each page is half
+          pageDiv.style.height = flipbookHeight + "px";
+          flipbookDiv.appendChild(pageDiv);
+          renderPage(i, scale);
+        }
+
+        // Initialize turn.js
+        $("#flipbook").turn({
+          width: flipbookWidth,
+          height: flipbookHeight,
+          autoCenter: true,
+        });
+      })
+      .catch(function(error) {
+        console.error("Error loading PDF:", error);
+      });
+
+    // Render a single page into a canvas
+    function renderPage(pageNumber, scale) {
+      pdfDoc.getPage(pageNumber).then(function(page) {
+        const viewport = page.getViewport({ scale: scale });
         const canvas = document.createElement("canvas");
         canvas.width = viewport.width;
         canvas.height = viewport.height;
         const context = canvas.getContext("2d");
 
-        // Render PDF page into the canvas context
         const renderContext = {
           canvasContext: context,
           viewport: viewport,
         };
 
-        page.render(renderContext).promise.then(function () {
+        page.render(renderContext).promise.then(function() {
           document.getElementById("page-" + pageNumber).appendChild(canvas);
         });
       });
     }
+
+    // Navigation button events
+    document.getElementById("prevPage").addEventListener("click", function() {
+      $("#flipbook").turn("previous");
+    });
+    document.getElementById("nextPage").addEventListener("click", function() {
+      $("#flipbook").turn("next");
+    });
   </script>
 </body>
 </html>
