@@ -25,7 +25,6 @@
       font-family: sans-serif;
     }
 
-    /* Navigation Buttons */
     .nav-buttons {
       margin: 10px;
     }
@@ -36,28 +35,24 @@
       cursor: pointer;
     }
 
-    /* The flipbook container MUST be position: relative 
-       so turn.js can place pages absolutely inside it */
+    /* The flipbook container MUST be position: relative */
     #flipbook {
       position: relative;
-      background: #999; /* Just a background color behind the pages */
+      background: #999;
       margin-bottom: 20px;
-      /* Width/height set in JS */
-      overflow: hidden; /* Hide any overflow from page animations */
+      overflow: hidden; /* important for turn.js */
+      /* We'll set width/height via JS */
     }
 
-    /* Each page is absolutely positioned at top-left
-       so they can be placed side by side by turn.js */
     .page {
       position: absolute;
       top: 0;
       left: 0;
       background: #fff;
       overflow: hidden;
-      /* width/height also set in JS */
     }
 
-    /* Optional shadow around each page's canvas for a "magazine" feel */
+    /* Optional shadow for the canvas */
     .page canvas {
       box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
     }
@@ -80,7 +75,7 @@
       console.log("[Flipbook Debug]", ...args);
     }
 
-    // Grab ?pdf= from the URL
+    // Utility to read ?pdf= from the URL
     function getQueryParam(param) {
       const params = new URLSearchParams(window.location.search);
       return params.get(param);
@@ -89,7 +84,7 @@
     let pdfDoc = null;
     let numPages = 0;
 
-    // If none provided, default
+    // If no PDF param, default to Tri-City
     const pdfUrl = getQueryParam("pdf") || "Tri-City%20Pickle%20Ball%20Courts.pdf";
     dbg("Loading PDF:", pdfUrl);
 
@@ -100,60 +95,57 @@
     // Decide single vs. double page based on screen width
     const isMobile = window.innerWidth < 800;
     const displayMode = isMobile ? "single" : "double";
-
     dbg("Display mode:", displayMode);
 
+    // Load the PDF
     pdfjsLib.getDocument(pdfUrl).promise
       .then(function(pdf) {
         pdfDoc = pdf;
         numPages = pdf.numPages;
         dbg("PDF loaded. Pages =", numPages);
 
-        // Measure page 1 to figure out sizing
+        // Measure page 1 to figure out the container sizing
         return pdf.getPage(1);
       })
       .then(function(page) {
-        // Base scale for page rendering
+        // 1) Base scale for overall crispness
         const baseScale = 3;
+
+        // 2) Create a viewport at baseScale
         const viewport = page.getViewport({ scale: baseScale });
         let pageWidth = viewport.width;
         let pageHeight = viewport.height;
-
         dbg("Base page size (scale=3):", pageWidth, "x", pageHeight);
 
-        // If double-page, total width is 2 * pageWidth
+        // 3) If double-page, total width is 2 * pageWidth
         let totalWidth = (displayMode === "double") ? pageWidth * 2 : pageWidth;
         let totalHeight = pageHeight;
 
-        // Fit to the browser window with some margin
+        // 4) Fit to the browser window with some margin
         const maxWidth = window.innerWidth * 0.9;
         const maxHeight = window.innerHeight * 0.8;
-
-        // Compute ratio to fit both width & height
         const widthRatio = maxWidth / totalWidth;
         const heightRatio = maxHeight / totalHeight;
         const finalRatio = Math.min(widthRatio, heightRatio, 1);
 
-        // Final scale
+        // 5) finalScale = baseScale * finalRatio
         const finalScale = baseScale * finalRatio;
         dbg("Scale ratio:", finalRatio.toFixed(2), "| finalScale:", finalScale.toFixed(2));
 
-        // Recompute final page size
+        // 6) Recompute the final page size using finalScale
         const finalViewport = page.getViewport({ scale: finalScale });
         pageWidth = finalViewport.width;
         pageHeight = finalViewport.height;
-
         totalWidth = (displayMode === "double") ? pageWidth * 2 : pageWidth;
         totalHeight = pageHeight;
-
         dbg("Flipbook size:", totalWidth.toFixed(2), "x", totalHeight.toFixed(2));
 
-        // Apply to #flipbook
+        // 7) Apply to #flipbook container
         const flipbookDiv = document.getElementById("flipbook");
         flipbookDiv.style.width = totalWidth + "px";
         flipbookDiv.style.height = totalHeight + "px";
 
-        // Create page divs for all pages
+        // 8) Create a page DIV for each PDF page
         for (let i = 1; i <= numPages; i++) {
           const pageDiv = document.createElement("div");
           pageDiv.className = "page";
@@ -162,19 +154,20 @@
           pageDiv.style.height = pageHeight + "px";
           flipbookDiv.appendChild(pageDiv);
 
+          // Render at finalScale + devicePixelRatio
           renderPage(i, finalScale);
         }
 
-        // Initialize turn.js with “book-like” options
+        // 9) Initialize turn.js
         $("#flipbook").turn({
           width: totalWidth,
           height: totalHeight,
           autoCenter: true,
           display: displayMode,
-          elevation: 50,   // 3D "height" to the page turning
-          gradients: true, // show gradients during flips
-          duration: 1200,  // slow flip
-          // cover: true,   // uncomment if you want page 1 alone on the right
+          elevation: 50,
+          gradients: true,
+          duration: 1200,
+          // cover: true, // if you want page 1 alone on the right
           when: {
             turned: function(e, page) {
               dbg("Page turned to:", page);
@@ -186,38 +179,40 @@
         console.error("Error loading PDF:", error);
       });
 
-    // Render a single page into a canvas
-    function renderPage(pageNumber) {
-  // Let's pick a baseScale of 2 for sharper text
-  const baseScale = 3;
+    // Render a single PDF page into a canvas at finalScale + devicePixelRatio
+    function renderPage(pageNumber, finalScale) {
+      pdfDoc.getPage(pageNumber).then(function(page) {
+        const dpr = window.devicePixelRatio || 1;
+        // Create the viewport at finalScale
+        const viewport = page.getViewport({ scale: finalScale });
 
-  pdfDoc.getPage(pageNumber).then(function(page) {
-    const devicePixelRatio = window.devicePixelRatio || 1;
-    const viewport = page.getViewport({ scale: baseScale });
-    const canvas = document.createElement("canvas");
-    const context = canvas.getContext("2d");
+        // Create a canvas
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("2d");
 
-    canvas.width = viewport.width * devicePixelRatio;
-    canvas.height = viewport.height * devicePixelRatio;
-    canvas.style.width = viewport.width + "px";
-    canvas.style.height = viewport.height + "px";
+        // Canvas internal size is scaled by devicePixelRatio
+        canvas.width = viewport.width * dpr;
+        canvas.height = viewport.height * dpr;
 
-    const transform = devicePixelRatio !== 1
-      ? [devicePixelRatio, 0, 0, devicePixelRatio, 0, 0]
-      : null;
+        // But style it at the "finalViewport" size
+        canvas.style.width = viewport.width + "px";
+        canvas.style.height = viewport.height + "px";
 
-    const renderContext = {
-      canvasContext: context,
-      viewport: viewport,
-      transform: transform
-    };
+        // PDF.js transform for HiDPI
+        const transform = (dpr !== 1) ? [dpr, 0, 0, dpr, 0, 0] : null;
 
-    page.render(renderContext).promise.then(function() {
-      document.getElementById("page-" + pageNumber).appendChild(canvas);
-      console.log("Page", pageNumber, "rendered at high DPI");
-    });
-  });
-}
+        const renderContext = {
+          canvasContext: context,
+          viewport: viewport,
+          transform: transform
+        };
+
+        page.render(renderContext).promise.then(function() {
+          document.getElementById("page-" + pageNumber).appendChild(canvas);
+          dbg("Page", pageNumber, "rendered at scale:", finalScale, "dpr:", dpr);
+        });
+      });
+    }
 
     // Prev/Next Buttons
     document.getElementById("prevPage").addEventListener("click", function() {
