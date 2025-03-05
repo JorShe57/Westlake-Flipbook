@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Flipbook (Desktop)</title>
+  <!-- jQuery (required for turn.js) -->
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <!-- turn.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/turn.js/3/turn.min.js"></script>
+  <!-- PDF.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background: #333;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      font-family: sans-serif;
+      overflow: hidden;
+    }
+
+    .top-controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 15px;
+      margin: 20px;
+      z-index: 10;
+    }
+    button {
+      background: #007acc;
+      color: #fff;
+      border: none;
+      padding: 10px 16px;
+      font-size: 1em;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.3s, transform 0.2s;
+    }
+    button:hover {
+      background: #005fa3;
+      transform: translateY(-2px);
+    }
+    .zoom-level {
+      font-size: 1.1em;
+      margin: 0 8px;
+      width: 40px;
+      text-align: right;
+    }
+
+    /* Flipbook container */
+    #flipbook {
+      position: relative;
+      background: #999;
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+    .flipbook-inner {
+      position: absolute;
+      left: 0; 
+      top: 0;
+    }
+    .page {
+      position: absolute;
+      top: 0;
+      left: 0;
+      background: #fff;
+      overflow: hidden;
+    }
+    .page canvas {
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    }
+
+    footer {
+      width: 100%;
+      background: #222;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .westlake-logo {
+      width: 120px;
+      height: auto;
+    }
+    .home-button {
+      background: #007acc;
+      color: #fff;
+      text-decoration: none;
+      padding: 10px 16px;
+      border-radius: 4px;
+      font-weight: bold;
+      transition: background 0.3s, transform 0.2s;
+    }
+    .home-button:hover {
+      background: #005fa3;
+      transform: translateY(-2px);
+    }
+
+    /* Loading overlay */
+    #loadingOverlay {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+      background: #333;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      transition: opacity 0.3s;
+    }
+    #loadingOverlay img {
+      width: 120px;
+      height: auto;
+      margin-bottom: 20px;
+    }
+    #loadingOverlay p {
+      color: #fff;
+      font-size: 1.2em;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="loadingOverlay">
+    <img 
+      src="https://raw.githubusercontent.com/JorShe57/Westlake-Flipbook/main/westlake-logo.png" 
+      alt="Loading Logo"
+    >
+    <p>Loading...</p>
+  </div>
+
+  <div class="top-controls">
+    <button id="prevPage">Previous</button>
+    <button id="nextPage">Next</button>
+
+    <button id="zoomOut">-</button>
+    <span class="zoom-level" id="zoomLevelDisplay">100</span><span>%</span>
+    <button id="zoomIn">+</button>
+  </div>
+
+  <div id="flipbook">
+    <div class="flipbook-inner" id="flipbookInner"></div>
+  </div>
+
+  <footer>
+    <img 
+      src="https://raw.githubusercontent.com/JorShe57/Westlake-Flipbook/main/westlake-logo.png" 
+      alt="Westlake Logo" 
+      class="westlake-logo"
+    >
+    <a href="index.html" class="home-button">Return to Home</a>
+  </footer>
+
+  <script>
+    function dbg(...args) {
+      console.log("[Flipbook Desktop]", ...args);
+    }
+    function getQueryParam(param) {
+      const params = new URLSearchParams(window.location.search);
+      return params.get(param);
+    }
+
+    let pdfDoc = null;
+    let numPages = 0;
+
+    // Always double-page for desktop
+    const displayMode = "double";
+
+    // Base scale 1.0 (100%)
+    let baseScale = 1.0;
+    const minScale = 0.5;
+    const maxScale = 2.0;
+    const scaleStep = 0.25;
+
+    let flipbookInitialized = false;
+
+    const pdfUrl = getQueryParam("pdf") || "Tri-City%20Pickle%20Ball%20Courts.pdf";
+    dbg("Loading PDF:", pdfUrl);
+
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js";
+
+    const loadingOverlay = document.getElementById("loadingOverlay");
+
+    pdfjsLib.getDocument(pdfUrl).promise
+      .then(pdf => {
+        pdfDoc = pdf;
+        numPages = pdf.numPages;
+        dbg("PDF loaded. Pages =", numPages);
+        renderFlipbook();
+      })
+      .catch(err => {
+        console.error("Error loading PDF:", err);
+        loadingOverlay.style.display = "none";
+      });
+
+    function renderFlipbook() {
+      // Show overlay
+      loadingOverlay.style.display = "flex";
+      loadingOverlay.style.opacity = "1";
+
+      if (flipbookInitialized) {
+        try {
+          $("#flipbookInner").turn("destroy");
+        } catch(e) {
+          dbg("Error destroying turn.js:", e);
+        }
+        document.getElementById("flipbookInner").innerHTML = "";
+        flipbookInitialized = false;
+      }
+
+      // Measure page 1
+      pdfDoc.getPage(1).then(page => {
+        const viewport = page.getViewport({ scale: baseScale });
+        const pageWidth = viewport.width;
+        const pageHeight = viewport.height;
+
+        // Double page => totalWidth = 2 * pageWidth
+        const totalWidth = pageWidth * 2;
+        const totalHeight = pageHeight;
+
+        const flipbookDiv = document.getElementById("flipbook");
+        flipbookDiv.style.width = totalWidth + "px";
+        flipbookDiv.style.height = totalHeight + "px";
+
+        const flipbookInner = document.getElementById("flipbookInner");
+        flipbookInner.style.width = totalWidth + "px";
+        flipbookInner.style.height = totalHeight + "px";
+
+        const tasks = [];
+        for (let i = 1; i <= numPages; i++) {
+          tasks.push(renderPage(i, baseScale, pageWidth, pageHeight));
+        }
+
+        Promise.all(tasks).then(() => {
+          // turn.js init
+          $("#flipbookInner").turn({
+            width: totalWidth,
+            height: totalHeight,
+            autoCenter: true,
+            display: displayMode,
+            elevation: 50,
+            gradients: true,
+            duration: 1200,
+            when: {
+              turned: function(e, page) {
+                dbg("Page turned to:", page);
+              }
+            }
+          });
+
+          flipbookInitialized = true;
+          updateZoomDisplay();
+
+          // Hide overlay
+          loadingOverlay.style.opacity = "0";
+          setTimeout(() => {
+            loadingOverlay.style.display = "none";
+          }, 300);
+        });
+      });
+    }
+
+    function renderPage(pageNumber, scale, pageWidth, pageHeight) {
+      return pdfDoc.getPage(pageNumber).then(page => {
+        const dpr = window.devicePixelRatio || 1;
+        const viewport = page.getViewport({ scale });
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("2d");
+
+        canvas.width = viewport.width * dpr;
+        canvas.height = viewport.height * dpr;
+        canvas.style.width = viewport.width + "px";
+        canvas.style.height = viewport.height + "px";
+
+        const transform = (dpr !== 1) ? [dpr, 0, 0, dpr, 0, 0] : null;
+
+        const renderContext = {
+          canvasContext: context,
+          viewport,
+          transform
+        };
+
+        return page.render(renderContext).promise.then(() => {
+          const pageDiv = document.createElement("div");
+          pageDiv.className = "page";
+          pageDiv.id = `page-${pageNumber}`;
+          pageDiv.style.width = pageWidth + "px";
+          pageDiv.style.height = pageHeight + "px";
+
+          pageDiv.appendChild(canvas);
+          document.getElementById("flipbookInner").appendChild(pageDiv);
+
+          dbg("Page", pageNumber, "rendered at scale:", scale, "dpr:", dpr);
+        });
+      });
+    }
+
+    // Zoom
+    document.getElementById("zoomIn").addEventListener("click", () => {
+      baseScale = Math.min(maxScale, baseScale + 0.25);
+      renderFlipbook();
+    });
+    document.getElementById("zoomOut").addEventListener("click", () => {
+      baseScale = Math.max(minScale, baseScale - 0.25);
+      renderFlipbook();
+    });
+
+    function updateZoomDisplay() {
+      const percent = Math.round(baseScale * 100);
+      document.getElementById("zoomLevelDisplay").textContent = percent;
+    }
+
+    // Prev/Next
+    document.getElementById("prevPage").addEventListener("click", () => {
+      if (flipbookInitialized) {
+        $("#flipbookInner").turn("previous");
+      }
+    });
+    document.getElementById("nextPage").addEventListener("click", () => {
+      if (flipbookInitialized) {
+        $("#flipbookInner").turn("next");
+      }
+    });
+  </script>
+</body>
+</html>
