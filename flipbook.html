@@ -22,9 +22,9 @@
       flex-direction: column;
       align-items: center;
       min-height: 100vh;
+      font-family: sans-serif;
     }
 
-    /* Buttons for flipping pages */
     .nav-buttons {
       margin: 10px;
     }
@@ -35,16 +35,21 @@
       cursor: pointer;
     }
 
-    /* Flipbook container; we'll size it via JS */
     #flipbook {
-      background: #999; /* just for visual reference */
+      background: #999; /* visible background behind pages */
       margin-bottom: 20px;
-      /* We'll set width/height dynamically in JS */
+      /* We'll set the width & height dynamically via JS */
     }
+
     .page {
       background: #fff;
       overflow: hidden;
-      /* Width/height also set dynamically */
+      /* Each page’s width/height also set dynamically */
+    }
+
+    /* Just to show a box shadow around pages (optional) */
+    .page canvas {
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
     }
   </style>
 </head>
@@ -56,16 +61,16 @@
     <button id="nextPage">Next</button>
   </div>
 
-  <!-- Container for the flipbook -->
+  <!-- Flipbook Container -->
   <div id="flipbook"></div>
 
   <script>
-    // Debug helper: log to console
+    // Debug log helper
     function dbg(...args) {
       console.log("[Flipbook Debug]", ...args);
     }
 
-    // Utility to get ?pdf= from URL
+    // Grab ?pdf= from the URL
     function getQueryParam(param) {
       const params = new URLSearchParams(window.location.search);
       return params.get(param);
@@ -74,78 +79,68 @@
     let pdfDoc = null;
     let numPages = 0;
 
-    // PDF from ?pdf=, or default
+    // If none provided, default to Tri-City
     const pdfUrl = getQueryParam("pdf") || "Tri-City%20Pickle%20Ball%20Courts.pdf";
-    dbg("PDF URL:", pdfUrl);
+    dbg("Loading PDF:", pdfUrl);
 
-    // PDF.js worker config
+    // Configure PDF.js worker
     pdfjsLib.GlobalWorkerOptions.workerSrc =
       "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js";
 
-    // We'll determine single vs double pages based on screen width
-    // e.g., < 800px = single page, else double
+    // Single-page mode on narrow screens, double-page on wider screens
     const isMobile = window.innerWidth < 800;
     const displayMode = isMobile ? "single" : "double";
-    dbg("Display Mode:", displayMode, "| Screen Width:", window.innerWidth);
+    dbg("Display mode:", displayMode);
 
-    // Load the PDF, measure the first page, then create the flipbook
     pdfjsLib.getDocument(pdfUrl).promise
       .then(function(pdf) {
         pdfDoc = pdf;
         numPages = pdf.numPages;
-        dbg("PDF Loaded. numPages =", numPages);
-        // Let's measure page 1
+        dbg("PDF loaded. Pages =", numPages);
+
+        // We'll measure page 1 to set overall size
         return pdf.getPage(1);
       })
       .then(function(page) {
-        // We'll compute a scale to fit the user's screen
-        // We pick a baseline scale (like 1.5) and then see if we need to shrink to fit
-        let baseScale = 1.5;
-
-        // Get the PDF page size at the base scale
+        const baseScale = 1.5;
         const viewport = page.getViewport({ scale: baseScale });
         let pageWidth = viewport.width;
         let pageHeight = viewport.height;
 
         dbg("Base page size (scale=1.5):", pageWidth, "x", pageHeight);
 
-        // If we're in double-page mode, the total width is double
-        let totalWidth = displayMode === "double" ? pageWidth * 2 : pageWidth;
+        // If double-page, total width is double
+        let totalWidth = (displayMode === "double") ? pageWidth * 2 : pageWidth;
         let totalHeight = pageHeight;
 
-        // We want to fit this in the browser window, minus some margin
-        let maxWidth = window.innerWidth * 0.9;
-        let maxHeight = window.innerHeight * 0.8; // 80% of screen height
+        // Fit to the browser window with some margin
+        const maxWidth = window.innerWidth * 0.9;
+        const maxHeight = window.innerHeight * 0.8;
 
-        // We'll scale down if needed
-        let widthRatio = maxWidth / totalWidth;
-        let heightRatio = maxHeight / totalHeight;
+        // Compute scale factor to fit both width & height
+        const widthRatio = maxWidth / totalWidth;
+        const heightRatio = maxHeight / totalHeight;
+        const finalRatio = Math.min(widthRatio, heightRatio, 1);
 
-        // The limiting ratio is the smaller of the two
-        let finalRatio = Math.min(widthRatio, heightRatio, 1); // don't scale above 1
+        const finalScale = baseScale * finalRatio;
+        dbg("Scale ratio:", finalRatio.toFixed(2), "| finalScale:", finalScale.toFixed(2));
 
-        // Apply final ratio to the base scale
-        let finalScale = baseScale * finalRatio;
-        dbg("widthRatio:", widthRatio.toFixed(2), "| heightRatio:", heightRatio.toFixed(2), "| finalScale:", finalScale.toFixed(2));
-
-        // Recompute the final page width/height with finalScale
+        // Recompute final page size
         const finalViewport = page.getViewport({ scale: finalScale });
         pageWidth = finalViewport.width;
         pageHeight = finalViewport.height;
-        dbg("Final page size:", pageWidth.toFixed(2), "x", pageHeight.toFixed(2));
 
-        // If double-page, total width is double
-        totalWidth = displayMode === "double" ? pageWidth * 2 : pageWidth;
+        totalWidth = (displayMode === "double") ? pageWidth * 2 : pageWidth;
         totalHeight = pageHeight;
 
-        dbg("Flipbook container size:", totalWidth.toFixed(2), "x", totalHeight.toFixed(2));
+        dbg("Flipbook size:", totalWidth.toFixed(2), "x", totalHeight.toFixed(2));
 
-        // Now set #flipbook to these dimensions
+        // Apply to #flipbook
         const flipbookDiv = document.getElementById("flipbook");
         flipbookDiv.style.width = totalWidth + "px";
         flipbookDiv.style.height = totalHeight + "px";
 
-        // Create divs for each page
+        // Create page divs for all pages
         for (let i = 1; i <= numPages; i++) {
           const pageDiv = document.createElement("div");
           pageDiv.className = "page";
@@ -153,15 +148,20 @@
           pageDiv.style.width = pageWidth + "px";
           pageDiv.style.height = pageHeight + "px";
           flipbookDiv.appendChild(pageDiv);
+
           renderPage(i, finalScale);
         }
 
-        // Initialize turn.js
+        // Initialize turn.js with “book-like” options
         $("#flipbook").turn({
           width: totalWidth,
           height: totalHeight,
           autoCenter: true,
-          display: displayMode, // single or double
+          display: displayMode,
+          elevation: 50,     // adds a 3D "height" to page turning
+          gradients: true,   // show gradients during page flip
+          duration: 1200,    // slow down the flip (ms)
+          // cover: true,    // uncomment if you want page 1 to be a cover on the right
           when: {
             turned: function(e, page) {
               dbg("Page turned to:", page);
@@ -173,7 +173,7 @@
         console.error("Error loading PDF:", error);
       });
 
-    // Render a single PDF page at the chosen scale
+    // Render a single page into a canvas
     function renderPage(pageNumber, scale) {
       pdfDoc.getPage(pageNumber).then(function(page) {
         const viewport = page.getViewport({ scale: scale });
