@@ -9,7 +9,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/turn.js/4.1.0/turn.min.js"></script>
   <!-- PDF.js for PDF rendering -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
-  <!-- Optional: PDF.js worker -->
+  <!-- PDF.js worker -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js"></script>
   <style>
     body {
@@ -37,21 +37,27 @@
   <div id="flipbook"></div>
   
   <script>
-    // Specify the PDF file – place your PDF in the same directory and update the filename if needed
-    const pdfUrl = 'https://github.com/JorShe57/Westlake-Flipbook/blob/main/Newsletter%20March%20-%20April%20Draft.pdf';
-
-    // Configure PDF.js worker (ensure the worker URL matches the version you use)
+    // Utility function to retrieve query parameters from the URL
+    function getQueryParam(param) {
+      const params = new URLSearchParams(window.location.search);
+      return params.get(param);
+    }
+    
+    // Get the PDF filename from the URL query parameter; default if not provided
+    const pdfUrl = getQueryParam("pdf") || "Pafar Final With Links.pdf";
+    
+    // Configure PDF.js worker (make sure the URL matches the version being used)
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js';
 
     let pdfDoc = null;
     let numPages = 0;
 
-    // Load the PDF document
+    // Load the PDF document using PDF.js
     pdfjsLib.getDocument(pdfUrl).promise.then(function(pdf) {
       pdfDoc = pdf;
       numPages = pdf.numPages;
 
-      // Create a div for each page and render it
+      // Create a container div for each page in the PDF
       for (let i = 1; i <= numPages; i++) {
         const pageDiv = document.createElement('div');
         pageDiv.className = 'page';
@@ -60,35 +66,36 @@
         renderPage(i);
       }
 
-      // Initialize turn.js after pages are added
+      // Initialize turn.js to create the flipbook effect
       $('#flipbook').turn({
         width: 800,
         height: 600,
         autoCenter: true
       });
+    }).catch(function(error) {
+      console.error("Error loading PDF:", error);
     });
 
-    // Function to render each PDF page into its respective div using PDF.js
+    // Function to render a single PDF page into a canvas
     function renderPage(pageNumber) {
       pdfDoc.getPage(pageNumber).then(function(page) {
-        // Adjust the scale as needed
+        // Adjust the scale factor for your PDF size
         const scale = 1.5;
         const viewport = page.getViewport({ scale: scale });
 
-        // Create a canvas for rendering the page
+        // Create a canvas element for rendering
         const canvas = document.createElement('canvas');
         canvas.width = viewport.width;
         canvas.height = viewport.height;
         const context = canvas.getContext('2d');
 
-        // Render PDF page into canvas context
+        // Set up rendering context and render the page
         const renderContext = {
           canvasContext: context,
           viewport: viewport
         };
 
         page.render(renderContext).promise.then(function() {
-          // Append the canvas to the corresponding page div
           document.getElementById('page-' + pageNumber).appendChild(canvas);
         });
       });
