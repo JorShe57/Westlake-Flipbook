@@ -4,8 +4,6 @@
   <meta charset="UTF-8" />
   <title>Westlake Flipbook Collection</title>
 
-  <!-- (Removed PDF.js references, since we're using images now) -->
-
   <style>
     /* Reset some default margins/padding */
     * {
@@ -25,7 +23,8 @@
       position: relative;
       width: 100%;
       min-height: 100vh; /* fill the screen vertically */
-      background: url("https://raw.githubusercontent.com/JorShe57/Westlake-Flipbook/main/IMG_0463.jpg") center center / cover no-repeat;
+      background: url("https://raw.githubusercontent.com/JorShe57/Westlake-Flipbook/main/IMG_0463.jpg") 
+        center center / cover no-repeat;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -121,49 +120,52 @@
   </div>
 
   <script>
-    // Example list of image-based flipbooks.
-    // 'title' is the displayed title, 'cover' is the path to your JPEG cover image,
-    // 'link' is where users go when they click (e.g., a flipbook page or another HTML).
+    // We'll use your Page 1 images as covers and link to flipbook-desktop.html with a ?flipbook= param
+    // Example: ?flipbook=newsletter or ?flipbook=pickleball
+
     const imageList = [
       {
         title: "Newsletter (March - April Draft)",
-        cover: "images/newsletter-cover.jpg",
-        link: "flipbook-newsletter.html"
+        // Page 1 image from your Gist
+        cover: "https://raw.githubusercontent.com/JorShe57/Westlake-Flipbook/main/Newsletter%20March%20-%20April%20Draft_Page_1.jpg",
+        // Link to desktop flipbook with ?flipbook=newsletter
+        link: "flipbook-desktop.html?flipbook=newsletter"
       },
       {
         title: "Tri-City Pickle Ball Courts",
-        cover: "images/pickleball-cover.jpg",
-        link: "flipbook-pickleball.html"
+        // Page 1 image from your Gist
+        cover: "https://raw.githubusercontent.com/JorShe57/Westlake-Flipbook/main/Tri-City%20Pickle%20Ball%20Courts_Page_1.jpg",
+        // Link to desktop flipbook with ?flipbook=pickleball
+        link: "flipbook-desktop.html?flipbook=pickleball"
       }
-      // Add more entries as needed
+      // Add more flipbooks if desired
     ];
 
-    // Generate image covers dynamically
     function loadImageCovers() {
       const grid = document.getElementById("coverGrid");
 
       for (const item of imageList) {
-        // 1) Create container div
+        // 1) Container
         const coverDiv = document.createElement("div");
         coverDiv.className = "pdf-cover";
 
-        // 2) Create link
+        // 2) Link
         const link = document.createElement("a");
-        link.href = item.link; // e.g., "flipbook.html" or "flipbook-pickleball.html"
+        link.href = item.link; // e.g. flipbook-desktop.html?flipbook=newsletter
         coverDiv.appendChild(link);
 
-        // 3) Create an <img> for the cover
+        // 3) Cover image
         const img = document.createElement("img");
         img.src = item.cover;
         link.appendChild(img);
 
-        // 4) Title under the image
+        // 4) Title
         const titleDiv = document.createElement("div");
         titleDiv.className = "pdf-title";
         titleDiv.textContent = item.title;
         coverDiv.appendChild(titleDiv);
 
-        // 5) Append the cover to the grid
+        // 5) Append to grid
         grid.appendChild(coverDiv);
       }
     }
