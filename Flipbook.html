@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PDF Flipbook</title>
+  <!-- jQuery (required for turn.js) -->
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <!-- turn.js for flipbook effect -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/turn.js/4.1.0/turn.min.js"></script>
+  <!-- PDF.js for PDF rendering -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+  <!-- Optional: PDF.js worker -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js"></script>
+  <style>
+    body {
+      background: #333;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+    #flipbook {
+      width: 800px;
+      height: 600px;
+    }
+    .page {
+      width: 400px;
+      height: 600px;
+      background: white;
+      overflow: hidden;
+    }
+  </style>
+</head>
+<body>
+  <!-- Container for the flipbook -->
+  <div id="flipbook"></div>
+  
+  <script>
+    // Specify the PDF file – place your PDF in the same directory and update the filename if needed
+    const pdfUrl = 'sample.pdf';
+
+    // Configure PDF.js worker (ensure the worker URL matches the version you use)
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js';
+
+    let pdfDoc = null;
+    let numPages = 0;
+
+    // Load the PDF document
+    pdfjsLib.getDocument(pdfUrl).promise.then(function(pdf) {
+      pdfDoc = pdf;
+      numPages = pdf.numPages;
+
+      // Create a div for each page and render it
+      for (let i = 1; i <= numPages; i++) {
+        const pageDiv = document.createElement('div');
+        pageDiv.className = 'page';
+        pageDiv.id = 'page-' + i;
+        document.getElementById('flipbook').appendChild(pageDiv);
+        renderPage(i);
+      }
+
+      // Initialize turn.js after pages are added
+      $('#flipbook').turn({
+        width: 800,
+        height: 600,
+        autoCenter: true
+      });
+    });
+
+    // Function to render each PDF page into its respective div using PDF.js
+    function renderPage(pageNumber) {
+      pdfDoc.getPage(pageNumber).then(function(page) {
+        // Adjust the scale as needed
+        const scale = 1.5;
+        const viewport = page.getViewport({ scale: scale });
+
+        // Create a canvas for rendering the page
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const context = canvas.getContext('2d');
+
+        // Render PDF page into canvas context
+        const renderContext = {
+          canvasContext: context,
+          viewport: viewport
+        };
+
+        page.render(renderContext).promise.then(function() {
+          // Append the canvas to the corresponding page div
+          document.getElementById('page-' + pageNumber).appendChild(canvas);
+        });
+      });
+    }
+  </script>
+</body>
+</html>
