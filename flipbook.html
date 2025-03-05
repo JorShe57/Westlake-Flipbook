@@ -109,13 +109,13 @@
       })
       .then(function(page) {
         // 1) Base scale for overall crispness
-        const baseScale = 3;
+        const baseScale = 2;
 
         // 2) Create a viewport at baseScale
         const viewport = page.getViewport({ scale: baseScale });
         let pageWidth = viewport.width;
         let pageHeight = viewport.height;
-        dbg("Base page size (scale=3):", pageWidth, "x", pageHeight);
+        dbg("Base page size (scale=2):", pageWidth, "x", pageHeight);
 
         // 3) If double-page, total width is 2 * pageWidth
         let totalWidth = (displayMode === "double") ? pageWidth * 2 : pageWidth;
