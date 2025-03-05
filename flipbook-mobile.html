@@ -1,17 +1,13 @@
-  <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Flipbook (Desktop)</title>
+  <title>Flipbook (Desktop, Images)</title>
   <!-- jQuery (required for turn.js) -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
   <!-- Use your custom turn.js file instead of the old CDN link -->
   <script src="turn.custom.js"></script>
-
-  <!-- PDF.js -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js"></script>
 
   <style>
     * {
@@ -70,6 +66,7 @@
       position: absolute;
       left: 0; 
       top: 0;
+      transform-origin: 0 0; /* so scale pivot is top-left */
     }
     .page {
       position: absolute;
@@ -78,7 +75,10 @@
       background: #fff;
       overflow: hidden;
     }
-    .page canvas {
+    .page img {
+      width: 100%;
+      height: auto;
+      display: block;
       box-shadow: 0 4px 10px rgba(0,0,0,0.3);
     }
 
@@ -167,56 +167,41 @@
   </footer>
 
   <script>
+    // Debug logger
     function dbg(...args) {
-      console.log("[Flipbook Mobile]", ...args);
-    }
-    function getQueryParam(param) {
-      const params = new URLSearchParams(window.location.search);
-      return params.get(param);
+      console.log("[Flipbook Desktop Images]", ...args);
     }
 
-    let pdfDoc = null;
-    let numPages = 0;
+    // Instead of PDFs, let's define an array of image paths
+    const imagePages = [
+      "images/page_01.jpg",
+      "images/page_02.jpg",
+      "images/page_03.jpg"
+      // etc...
+    ];
 
-    // Single-page mode for mobile
-    const displayMode = "single";
+    let flipbookInitialized = false;
 
-    // We'll do a two-step approach:
-    // 1) Base scale of 1.0
-    // 2) Auto-fit to screen width if needed (scaling up or down)
-
+    // We'll do a simple container scale for zoom
     let baseScale = 1.0;
     const minScale = 0.5;
     const maxScale = 2.0;
     const scaleStep = 0.25;
 
-    let flipbookInitialized = false;
+    // For demonstration, let's do double-page (like a magazine)
+    const displayMode = "double";
 
-    const pdfUrl = getQueryParam("pdf") || "Tri-City%20Pickle%20Ball%20Courts.pdf";
-    dbg("Loading PDF:", pdfUrl);
+    // On page load
+    window.addEventListener("DOMContentLoaded", () => {
+      loadImagesAndInitFlipbook();
+    });
 
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js";
-
-    const loadingOverlay = document.getElementById("loadingOverlay");
-
-    // Load the PDF
-    pdfjsLib.getDocument(pdfUrl).promise
-      .then(pdf => {
-        pdfDoc = pdf;
-        numPages = pdf.numPages;
-        dbg("PDF loaded. Pages =", numPages);
-        renderFlipbook();
-      })
-      .catch(err => {
-        console.error("Error loading PDF:", err);
-        loadingOverlay.style.display = "none";
-      });
-
-    function renderFlipbook() {
+    function loadImagesAndInitFlipbook() {
+      const loadingOverlay = document.getElementById("loadingOverlay");
       loadingOverlay.style.display = "flex";
       loadingOverlay.style.opacity = "1";
 
+      // If we previously initialized, destroy and clear old pages
       if (flipbookInitialized) {
         try {
           $("#flipbookInner").turn("destroy");
@@ -227,125 +212,89 @@
         flipbookInitialized = false;
       }
 
-      // We'll measure page 1, auto-fit to screen width, then render all pages
-      pdfDoc.getPage(1).then(page => {
-        // Step 1: measure at baseScale
-        const viewport = page.getViewport({ scale: baseScale });
-        let pageWidth = viewport.width;
-        let pageHeight = viewport.height;
+      // We'll create .page divs for each image
+      const flipbookInner = document.getElementById("flipbookInner");
 
-        // Step 2: auto-fit to phone's width
-        const phoneWidth = window.innerWidth * 0.95; 
-        if (pageWidth < phoneWidth) {
-          // if page is smaller than phone width, let's scale up
-          const ratio = phoneWidth / pageWidth;
-          baseScale *= ratio; 
-          // re-measure
-          const newViewport = page.getViewport({ scale: baseScale });
-          pageWidth = newViewport.width;
-          pageHeight = newViewport.height;
-        } else if (pageWidth > phoneWidth) {
-          // if page is bigger than phone width, let's scale down
-          const ratio = phoneWidth / pageWidth;
-          baseScale *= ratio;
-          const newViewport = page.getViewport({ scale: baseScale });
-          pageWidth = newViewport.width;
-          pageHeight = newViewport.height;
-        }
+      // Let's assume all images have the same dimension
+      // We can measure the first image to figure out the width/height
+      const firstImg = new Image();
+      firstImg.onload = function() {
+        let pageWidth = firstImg.naturalWidth;
+        let pageHeight = firstImg.naturalHeight;
 
-        // clamp baseScale if it goes beyond min/max
-        if (baseScale < minScale) baseScale = minScale;
-        if (baseScale > maxScale) baseScale = maxScale;
-
-        const totalWidth = pageWidth;
+        // If double-page, total width is 2 * pageWidth
+        const totalWidth = (displayMode === "double") ? pageWidth * 2 : pageWidth;
         const totalHeight = pageHeight;
 
-        // Set container
+        // Set #flipbook size
         const flipbookDiv = document.getElementById("flipbook");
         flipbookDiv.style.width = totalWidth + "px";
         flipbookDiv.style.height = totalHeight + "px";
 
-        const flipbookInner = document.getElementById("flipbookInner");
         flipbookInner.style.width = totalWidth + "px";
         flipbookInner.style.height = totalHeight + "px";
 
-        // Render pages
-        const tasks = [];
-        for (let i = 1; i <= numPages; i++) {
-          tasks.push(renderPage(i, baseScale, pageWidth, pageHeight));
-        }
-
-        Promise.all(tasks).then(() => {
-          // turn.js init
-          $("#flipbookInner").turn({
-            width: totalWidth,
-            height: totalHeight,
-            autoCenter: true,
-            display: displayMode,
-            elevation: 50,
-            gradients: true,
-            duration: 1200,
-            when: {
-              turned: function(e, page) {
-                dbg("Page turned to:", page);
-              }
-            }
-          });
-
-          flipbookInitialized = true;
-          updateZoomDisplay();
-
-          loadingOverlay.style.opacity = "0";
-          setTimeout(() => {
-            loadingOverlay.style.display = "none";
-          }, 300);
-        });
-      });
-    }
-
-    function renderPage(pageNumber, scale, pageWidth, pageHeight) {
-      return pdfDoc.getPage(pageNumber).then(page => {
-        const dpr = window.devicePixelRatio || 1;
-        const viewport = page.getViewport({ scale });
-        const canvas = document.createElement("canvas");
-        const context = canvas.getContext("2d");
-
-        canvas.width = viewport.width * dpr;
-        canvas.height = viewport.height * dpr;
-        canvas.style.width = viewport.width + "px";
-        canvas.style.height = viewport.height + "px";
-
-        const transform = (dpr !== 1) ? [dpr, 0, 0, dpr, 0, 0] : null;
-
-        const renderContext = {
-          canvasContext: context,
-          viewport,
-          transform
-        };
-
-        return page.render(renderContext).promise.then(() => {
+        // Create pages
+        for (let i = 0; i < imagePages.length; i++) {
           const pageDiv = document.createElement("div");
           pageDiv.className = "page";
-          pageDiv.id = `page-${pageNumber}`;
           pageDiv.style.width = pageWidth + "px";
           pageDiv.style.height = pageHeight + "px";
 
-          pageDiv.appendChild(canvas);
-          document.getElementById("flipbookInner").appendChild(pageDiv);
+          const img = document.createElement("img");
+          img.src = imagePages[i];
+          pageDiv.appendChild(img);
 
-          dbg("Page", pageNumber, "rendered at scale:", scale, "dpr:", dpr);
+          flipbookInner.appendChild(pageDiv);
+        }
+
+        // Now initialize turn.js
+        $("#flipbookInner").turn({
+          width: totalWidth,
+          height: totalHeight,
+          autoCenter: true,
+          display: displayMode,
+          elevation: 50,
+          gradients: true,
+          duration: 1200,
+          when: {
+            turned: function(e, page) {
+              dbg("Page turned to:", page);
+            }
+          }
         });
-      });
+
+        flipbookInitialized = true;
+        updateZoomDisplay();
+
+        // Hide overlay
+        loadingOverlay.style.opacity = "0";
+        setTimeout(() => {
+          loadingOverlay.style.display = "none";
+        }, 300);
+      };
+
+      // Trigger image load
+      firstImg.src = imagePages[0];
     }
 
-    // Zoom
+    // Basic container scale approach
+    // We'll do a simple transform on .flipbook-inner
+    function applyScale(scale) {
+      const flipbookInner = document.getElementById("flipbookInner");
+      flipbookInner.style.transform = `scale(${scale})`;
+    }
+
+    // Zoom controls
     document.getElementById("zoomIn").addEventListener("click", () => {
       baseScale = Math.min(maxScale, baseScale + scaleStep);
-      renderFlipbook();
+      applyScale(baseScale);
+      updateZoomDisplay();
     });
     document.getElementById("zoomOut").addEventListener("click", () => {
       baseScale = Math.max(minScale, baseScale - scaleStep);
-      renderFlipbook();
+      applyScale(baseScale);
+      updateZoomDisplay();
     });
 
     function updateZoomDisplay() {
