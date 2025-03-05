@@ -2,10 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Flipbook (Mobile, Images)</title>
+  <title>Flipbook (Mobile, Auto-Fit)</title>
   <!-- jQuery (required for turn.js) -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-
   <!-- Use your custom turn.js file -->
   <script src="turn.custom.js"></script>
 
@@ -55,7 +54,6 @@
       text-align: right;
     }
 
-    /* Flipbook container */
     #flipbook {
       position: relative;
       background: #999;
@@ -64,9 +62,9 @@
     }
     .flipbook-inner {
       position: absolute;
-      left: 0; 
+      left: 0;
       top: 0;
-      transform-origin: 0 0; /* pivot top-left for scale */
+      transform-origin: 0 0;
     }
     .page {
       position: absolute;
@@ -81,69 +79,9 @@
       display: block;
       box-shadow: 0 4px 10px rgba(0,0,0,0.3);
     }
-
-    footer {
-      width: 100%;
-      background: #222;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 10px;
-    }
-    .westlake-logo {
-      width: 120px;
-      height: auto;
-    }
-    .home-button {
-      background: #007acc;
-      color: #fff;
-      text-decoration: none;
-      padding: 10px 16px;
-      border-radius: 4px;
-      font-weight: bold;
-      transition: background 0.3s, transform 0.2s;
-    }
-    .home-button:hover {
-      background: #005fa3;
-      transform: translateY(-2px);
-    }
-
-    /* Loading overlay */
-    #loadingOverlay {
-      position: fixed;
-      top: 0; left: 0;
-      width: 100%;
-      height: 100%;
-      background: #333;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      z-index: 9999;
-      transition: opacity 0.3s;
-    }
-    #loadingOverlay img {
-      width: 120px;
-      height: auto;
-      margin-bottom: 20px;
-    }
-    #loadingOverlay p {
-      color: #fff;
-      font-size: 1.2em;
-    }
   </style>
 </head>
 <body>
-
-  <!-- Optional loading screen -->
-  <div id="loadingOverlay">
-    <img 
-      src="https://github.com/JorShe57/Westlake-Flipbook/blob/main/Logo%20w%20drop%20shadown%20updated.png" 
-      alt="Loading Logo"
-    >
-    <p>Loading...</p>
-  </div>
 
   <div class="top-controls">
     <button id="prevPage">Previous</button>
@@ -158,38 +96,23 @@
     <div class="flipbook-inner" id="flipbookInner"></div>
   </div>
 
-  <footer>
-    <img 
-      src="https://github.com/JorShe57/Westlake-Flipbook/blob/main/Logo%20w%20drop%20shadown%20updated.png" 
-      alt="Westlake Logo" 
-      class="westlake-logo"
-    >
-    <a href="index.html" class="home-button">Return to Home</a>
-  </footer>
-
   <script>
-    // Debug logger
-    function dbg(...args) {
-      console.log("[Flipbook Mobile Images]", ...args);
-    }
-
-    // An array of images for your single-page flipbook
+    // Single-page images
     const imagePages = [
-      "images/page1.jpg",
-      "images/page2.jpg",
-      "images/page3.jpg"
+      "images/mobile_page1.jpg",
+      "images/mobile_page2.jpg"
       // etc...
     ];
 
     let flipbookInitialized = false;
 
-    // We'll do a simple container scale for zoom
+    // Container scale for manual zoom
     let baseScale = 1.0;
     const minScale = 0.5;
     const maxScale = 2.0;
     const scaleStep = 0.25;
 
-    // Single-page mode for mobile
+    // Single-page
     const displayMode = "single";
 
     window.addEventListener("DOMContentLoaded", () => {
@@ -197,46 +120,63 @@
     });
 
     function loadImagesAndInitFlipbook() {
-      const loadingOverlay = document.getElementById("loadingOverlay");
-      loadingOverlay.style.display = "flex";
-      loadingOverlay.style.opacity = "1";
-
-      // If we previously initialized, destroy old flipbook
       if (flipbookInitialized) {
         try {
           $("#flipbookInner").turn("destroy");
         } catch(e) {
-          dbg("Error destroying turn.js:", e);
+          console.log("Error destroying turn.js:", e);
         }
         document.getElementById("flipbookInner").innerHTML = "";
         flipbookInitialized = false;
       }
 
+      if (!imagePages.length) {
+        console.error("No images found");
+        return;
+      }
+
       const flipbookInner = document.getElementById("flipbookInner");
 
-      // Measure first image to get width/height
+      // Measure first image
       const firstImg = new Image();
       firstImg.onload = function() {
         const pageWidth = firstImg.naturalWidth;
         const pageHeight = firstImg.naturalHeight;
 
-        // If single-page, totalWidth = pageWidth
-        const totalWidth = pageWidth;
-        const totalHeight = pageHeight;
+        // Single-page => totalWidth = pageWidth
+        const contentWidth = pageWidth;
+        const contentHeight = pageHeight;
 
+        // Available screen
+        const maxW = window.innerWidth * 0.9;
+        const maxH = window.innerHeight * 0.8;
+
+        const contentAspect = contentWidth / contentHeight;
+        const screenAspect = maxW / maxH;
+
+        let finalWidth, finalHeight;
+        if (contentAspect > screenAspect) {
+          finalWidth = maxW;
+          finalHeight = maxW / contentAspect;
+        } else {
+          finalHeight = maxH;
+          finalWidth = maxH * contentAspect;
+        }
+
+        // Set #flipbook size
         const flipbookDiv = document.getElementById("flipbook");
-        flipbookDiv.style.width = totalWidth + "px";
-        flipbookDiv.style.height = totalHeight + "px";
+        flipbookDiv.style.width = finalWidth + "px";
+        flipbookDiv.style.height = finalHeight + "px";
 
-        flipbookInner.style.width = totalWidth + "px";
-        flipbookInner.style.height = totalHeight + "px";
+        flipbookInner.style.width = finalWidth + "px";
+        flipbookInner.style.height = finalHeight + "px";
 
         // Create pages
         for (let i = 0; i < imagePages.length; i++) {
           const pageDiv = document.createElement("div");
           pageDiv.className = "page";
-          pageDiv.style.width = pageWidth + "px";
-          pageDiv.style.height = pageHeight + "px";
+          pageDiv.style.width = finalWidth + "px";
+          pageDiv.style.height = finalHeight + "px";
 
           const img = document.createElement("img");
           img.src = imagePages[i];
@@ -245,43 +185,29 @@
           flipbookInner.appendChild(pageDiv);
         }
 
-        // Initialize turn.js
+        // turn.js init
         $("#flipbookInner").turn({
-          width: totalWidth,
-          height: totalHeight,
+          width: finalWidth,
+          height: finalHeight,
           autoCenter: true,
-          display: displayMode, // single-page
+          display: displayMode,
           elevation: 50,
           gradients: true,
-          duration: 1200,
-          when: {
-            turned: function(e, page) {
-              dbg("Page turned to:", page);
-            }
-          }
+          duration: 1200
         });
 
         flipbookInitialized = true;
         updateZoomDisplay();
-
-        // Hide overlay
-        loadingOverlay.style.opacity = "0";
-        setTimeout(() => {
-          loadingOverlay.style.display = "none";
-        }, 300);
       };
 
-      // Start loading
       firstImg.src = imagePages[0];
     }
 
-    // Basic container scale
     function applyScale(scale) {
-      const flipbookInner = document.getElementById("flipbookInner");
-      flipbookInner.style.transform = `scale(${scale})`;
+      document.getElementById("flipbookInner").style.transform = `scale(${scale})`;
     }
 
-    // Zoom In/Out
+    // Zoom
     document.getElementById("zoomIn").addEventListener("click", () => {
       baseScale = Math.min(maxScale, baseScale + scaleStep);
       applyScale(baseScale);
