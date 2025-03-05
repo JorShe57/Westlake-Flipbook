@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <title>Westlake Flipbook Collection</title>
-  <!-- PDF.js scripts (for rendering the cover pages) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js"></script>
+
+  <!-- (Removed PDF.js references, since we're using images now) -->
 
   <style>
     /* Reset some default margins/padding */
@@ -43,7 +42,7 @@
       text-align: center;
     }
 
-    /* A container to hold the grid of PDF covers, with a background that stands out */
+    /* A container to hold the grid of covers, with a background that stands out */
     .pdf-grid-container {
       background-color: rgba(255, 255, 255, 0.85); /* Slightly translucent white */
       border-radius: 8px;
@@ -52,7 +51,7 @@
       width: 100%;
     }
 
-    /* The grid that holds each PDF cover */
+    /* The grid that holds each cover */
     .pdf-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
@@ -61,7 +60,7 @@
       align-items: start;
     }
 
-    /* Each PDF cover container */
+    /* Each cover container */
     .pdf-cover {
       background: #fff;
       border: 1px solid #ddd;
@@ -82,7 +81,7 @@
       box-shadow: 0 6px 12px rgba(0,0,0,0.2);
     }
 
-    /* The link that wraps the canvas cover */
+    /* The link that wraps the cover image */
     .pdf-cover a {
       text-decoration: none;
       color: inherit;
@@ -92,16 +91,16 @@
       padding: 10px;
     }
 
-    /* The canvas (thumbnail) styling */
-    .pdf-cover canvas {
+    /* The cover image styling */
+    .pdf-cover img {
       display: block;
-      width: 100%; /* Let the canvas scale to container width */
+      width: 100%; /* Let the image scale to container width */
       height: auto;
       border-bottom: 1px solid #ddd;
       margin-bottom: 8px;
     }
 
-    /* PDF title styling */
+    /* Title styling */
     .pdf-title {
       font-size: 0.9rem;
       font-weight: bold;
@@ -115,86 +114,61 @@
     <h1>Welcome to the Westlake Flipbook Collection</h1>
 
     <div class="pdf-grid-container">
-      <div class="pdf-grid">
-        <!-- The PDF covers will be generated here by JavaScript -->
+      <div class="pdf-grid" id="coverGrid">
+        <!-- Covers will be generated here by JavaScript -->
       </div>
     </div>
   </div>
 
   <script>
-    // Configure PDF.js worker
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js";
-
-    // List of PDFs (you can add more up to 9 or beyond)
-    // 'title' is what appears under the cover, 'pdf' is the actual file name (URL-encoded if needed)
-    const pdfList = [
+    // Example list of image-based flipbooks.
+    // 'title' is the displayed title, 'cover' is the path to your JPEG cover image,
+    // 'link' is where users go when they click (e.g., a flipbook page or another HTML).
+    const imageList = [
       {
         title: "Newsletter (March - April Draft)",
-        pdf: "Newsletter%20March%20-%20April%20Draft.pdf"
+        cover: "images/newsletter-cover.jpg",
+        link: "flipbook-newsletter.html"
       },
       {
         title: "Tri-City Pickle Ball Courts",
-        pdf: "Tri-City%20Pickle%20Ball%20Courts.pdf"
+        cover: "images/pickleball-cover.jpg",
+        link: "flipbook-pickleball.html"
       }
-      // Add more PDFs here:
-      // { title: "Another PDF", pdf: "Another%20File.pdf" },
-      // ...
+      // Add more entries as needed
     ];
 
-    // We'll load the first page of each PDF at a small scale to act as a "cover."
-    // Then place the canvas + title in the grid.
-    async function loadPdfCovers() {
-      const grid = document.querySelector(".pdf-grid");
+    // Generate image covers dynamically
+    function loadImageCovers() {
+      const grid = document.getElementById("coverGrid");
 
-      for (const item of pdfList) {
-        // 1) Create the container div
+      for (const item of imageList) {
+        // 1) Create container div
         const coverDiv = document.createElement("div");
         coverDiv.className = "pdf-cover";
 
-        // 2) Create a link to flipbook.html with the PDF param
+        // 2) Create link
         const link = document.createElement("a");
-        link.href = `flipbook.html?pdf=${item.pdf}`;
+        link.href = item.link; // e.g., "flipbook.html" or "flipbook-pickleball.html"
         coverDiv.appendChild(link);
 
-        // 3) Create a canvas for the PDF cover
-        const canvas = document.createElement("canvas");
-        link.appendChild(canvas);
+        // 3) Create an <img> for the cover
+        const img = document.createElement("img");
+        img.src = item.cover;
+        link.appendChild(img);
 
-        // 4) Load the PDF and render the first page at a small scale
-        try {
-          const loadingTask = pdfjsLib.getDocument(item.pdf);
-          const pdfDoc = await loadingTask.promise;
-          const page = await pdfDoc.getPage(1);
-          const scale = 0.25; // adjust for bigger/smaller thumbnail
-          const viewport = page.getViewport({ scale });
-
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
-
-          const context = canvas.getContext("2d");
-          const renderContext = {
-            canvasContext: context,
-            viewport: viewport
-          };
-          await page.render(renderContext).promise;
-        } catch (error) {
-          console.error("Error loading PDF cover:", item.pdf, error);
-        }
-
-        // 5) Add a title under the canvas
+        // 4) Title under the image
         const titleDiv = document.createElement("div");
         titleDiv.className = "pdf-title";
         titleDiv.textContent = item.title;
         coverDiv.appendChild(titleDiv);
 
-        // 6) Append the cover to the grid
+        // 5) Append the cover to the grid
         grid.appendChild(coverDiv);
       }
     }
 
-    // On page load, generate all covers
-    document.addEventListener("DOMContentLoaded", loadPdfCovers);
+    document.addEventListener("DOMContentLoaded", loadImageCovers);
   </script>
 </body>
 </html>
