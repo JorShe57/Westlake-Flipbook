@@ -28,18 +28,18 @@
       align-items: center;
       min-height: 100vh;
       font-family: sans-serif;
+      overflow: hidden; /* Avoid scrollbars from the body if we want to rely on pan */
     }
 
-    /* Top Controls: Prev/Next + Zoom */
     .top-controls {
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 15px;
       margin: 20px;
+      z-index: 10; /* stay above flipbook */
     }
 
-    /* Styled Buttons */
     button {
       background: #007acc;
       color: #fff;
@@ -55,19 +55,29 @@
       transform: translateY(-2px);
     }
 
-    /* Zoom display label */
     .zoom-level {
       font-size: 1.1em;
       margin: 0 8px;
     }
 
-    /* The flipbook container MUST be position: relative */
+    /* Outer container with fixed size. We allow panning inside it */
     #flipbook {
       position: relative;
       background: #999;
       margin-bottom: 20px;
-      overflow: hidden; /* important for turn.js */
+      overflow: hidden; /* Important for panning */
       /* We'll set width/height in JS */
+    }
+
+    /* Inner container that turn.js uses for pages */
+    .flipbook-inner {
+      position: absolute;
+      left: 0; top: 0;
+      transform: translate(0, 0);
+      cursor: grab; /* show grab cursor for panning */
+    }
+    .flipbook-inner:active {
+      cursor: grabbing;
     }
 
     .page {
@@ -76,31 +86,12 @@
       left: 0;
       background: #fff;
       overflow: hidden;
-      /* Let the user see a pointer near the corner for flipping */
       cursor: default;
     }
-
     .page canvas {
       box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
     }
 
-    /* Optional corner flipping cue: remove pointer-events: none so corner grabs work fine */
-    .page::after {
-      content: "Flip";
-      position: absolute;
-      right: 5px;
-      bottom: 5px;
-      font-size: 0.8em;
-      color: rgba(0,0,0,0.4);
-      transform: rotate(-20deg);
-      /* no pointer-events: none needed, but we can keep it if we want to ensure the text doesn't block flips */
-      pointer-events: none; 
-    }
-    .page:hover::after {
-      color: rgba(0,0,0,0.8);
-    }
-
-    /* Footer with Westlake logo + Return to Home */
     footer {
       width: 100%;
       background: #222;
@@ -131,38 +122,34 @@
 </head>
 <body>
 
-  <!-- Top Controls: Prev/Next + Zoom -->
   <div class="top-controls">
     <button id="prevPage">Previous</button>
     <button id="nextPage">Next</button>
 
-    <!-- Zoom Controls -->
     <button id="zoomOut">-</button>
     <span class="zoom-level" id="zoomLevelDisplay">100%</span>
     <button id="zoomIn">+</button>
   </div>
 
-  <!-- Flipbook Container -->
-  <div id="flipbook"></div>
+  <div id="flipbook">
+    <!-- turn.js will be initialized on this .flipbook-inner container -->
+    <div class="flipbook-inner" id="flipbookInner"></div>
+  </div>
 
   <footer>
-    <!-- Westlake Logo: update the src to a working path or GitHub raw URL -->
     <img 
-      src="Logo w drop shadown updated.png" 
+      src="https://raw.githubusercontent.com/JorShe57/Westlake-Flipbook/main/westlake-logo.png" 
       alt="Westlake Logo" 
       class="westlake-logo"
     >
-    <!-- Return to Home Button -->
     <a href="index.html" class="home-button">Return to Home</a>
   </footer>
 
   <script>
-    // Debug log helper
     function dbg(...args) {
       console.log("[Flipbook Debug]", ...args);
     }
 
-    // Grab ?pdf= from the URL
     function getQueryParam(param) {
       const params = new URLSearchParams(window.location.search);
       return params.get(param);
@@ -175,7 +162,7 @@
     const pdfUrl = getQueryParam("pdf") || "Tri-City%20Pickle%20Ball%20Courts.pdf";
     dbg("Loading PDF:", pdfUrl);
 
-    // PDF.js worker config
+    // PDF.js worker
     pdfjsLib.GlobalWorkerOptions.workerSrc =
       "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js";
 
@@ -184,14 +171,17 @@
     let displayMode = isMobile ? "single" : "double";
     dbg("Initial display mode:", displayMode);
 
-    // 1) Set the initial zoom to 100% => baseScale = 1.0
     let baseScale = 1.0;
     const minScale = 0.5;
     const maxScale = 3.0;
     const scaleStep = 0.25;
 
-    // For re-rendering
     let flipbookInitialized = false;
+    let panX = 0; // track horizontal pan offset
+    let panY = 0; // track vertical pan offset
+    let isPanning = false;
+    let startX = 0;
+    let startY = 0;
 
     // Load the PDF
     pdfjsLib.getDocument(pdfUrl).promise
@@ -199,84 +189,90 @@
         pdfDoc = pdf;
         numPages = pdf.numPages;
         dbg("PDF loaded. Pages =", numPages);
-
-        // Render the flipbook initially
         renderFlipbook();
       })
       .catch(function(error) {
         console.error("Error loading PDF:", error);
       });
 
-    // Render the entire flipbook
     function renderFlipbook() {
-      // If there's already a flipbook, destroy it to avoid console errors
       if (flipbookInitialized) {
         try {
-          $("#flipbook").turn("destroy");
-        } catch (e) {
-          dbg("Error destroying turn.js instance (might not be fatal):", e);
+          $("#flipbookInner").turn("destroy");
+        } catch(e) {
+          dbg("Error destroying turn.js:", e);
         }
-        document.getElementById("flipbook").innerHTML = "";
+        document.getElementById("flipbookInner").innerHTML = "";
         flipbookInitialized = false;
+        panX = 0; // reset pan
+        panY = 0;
+        updatePan();
       }
 
-      // We'll measure page 1 to figure out container sizing
       pdfDoc.getPage(1).then(function(page) {
-        // Re-check screen size in case the user resized
         displayMode = (window.innerWidth < 800) ? "single" : "double";
 
-        // Use baseScale
+        // Measure page 1 at baseScale
         const viewport = page.getViewport({ scale: baseScale });
         let pageWidth = viewport.width;
         let pageHeight = viewport.height;
 
-        // Double-page => total width is 2 * pageWidth
+        // If on mobile, auto-fit to screen width
+        if (isMobile) {
+          const maxWidth = window.innerWidth * 0.95;
+          const ratio = maxWidth / pageWidth;
+          if (ratio < 1) {
+            baseScale *= ratio;
+            // Recompute with new baseScale
+            const vp2 = page.getViewport({ scale: baseScale });
+            pageWidth = vp2.width;
+            pageHeight = vp2.height;
+          }
+        }
+
         let totalWidth = (displayMode === "double") ? pageWidth * 2 : pageWidth;
         let totalHeight = pageHeight;
 
-        // Apply to #flipbook
+        // Set #flipbook size
         const flipbookDiv = document.getElementById("flipbook");
         flipbookDiv.style.width = totalWidth + "px";
         flipbookDiv.style.height = totalHeight + "px";
 
-        // Create each page div
-        for (let i = 1; i <= numPages; i++) {
-          const pageDiv = document.createElement("div");
-          pageDiv.className = "page";
-          pageDiv.id = "page-" + i;
-          pageDiv.style.width = pageWidth + "px";
-          pageDiv.style.height = pageHeight + "px";
-          flipbookDiv.appendChild(pageDiv);
+        // We'll init turn.js on #flipbookInner
+        const inner = document.getElementById("flipbookInner");
+        inner.style.width = totalWidth + "px";
+        inner.style.height = totalHeight + "px";
 
-          // Render the page at baseScale + devicePixelRatio
-          renderPage(i, baseScale);
+        // Create each page
+        const promises = [];
+        for (let i = 1; i <= numPages; i++) {
+          promises.push(renderPage(i, baseScale, pageWidth, pageHeight));
         }
 
-        // Initialize turn.js
-        $("#flipbook").turn({
-          cornerSize: 100,
-          width: totalWidth,
-          height: totalHeight,
-          autoCenter: true,
-          display: displayMode,
-          elevation: 50,
-          gradients: true,
-          duration: 1200,
-          when: {
-            turned: function(e, page) {
-              dbg("Page turned to:", page);
+        Promise.all(promises).then(() => {
+          // Initialize turn.js on #flipbookInner
+          $("#flipbookInner").turn({
+            width: totalWidth,
+            height: totalHeight,
+            autoCenter: true,
+            display: displayMode,
+            elevation: 50,
+            gradients: true,
+            duration: 1200,
+            when: {
+              turned: function(e, page) {
+                dbg("Page turned to:", page);
+              }
             }
-          }
+          });
+          flipbookInitialized = true;
+          updateZoomDisplay();
         });
-
-        flipbookInitialized = true;
-        updateZoomDisplay();
       });
     }
 
-    // Render a single page at baseScale * devicePixelRatio
-    function renderPage(pageNumber, scale) {
-      pdfDoc.getPage(pageNumber).then(function(page) {
+    function renderPage(pageNumber, scale, pageWidth, pageHeight) {
+      return pdfDoc.getPage(pageNumber).then(function(page) {
         const dpr = window.devicePixelRatio || 1;
         const viewport = page.getViewport({ scale: scale });
         const canvas = document.createElement("canvas");
@@ -295,33 +291,33 @@
           transform: transform
         };
 
-        page.render(renderContext).promise.then(function() {
-          document.getElementById("page-" + pageNumber).appendChild(canvas);
+        return page.render(renderContext).promise.then(() => {
+          // Create a div for the page
+          const pageDiv = document.createElement("div");
+          pageDiv.className = "page";
+          pageDiv.id = "page-" + pageNumber;
+          pageDiv.style.width = pageWidth + "px";
+          pageDiv.style.height = pageHeight + "px";
+          pageDiv.style.left = "0px";
+          pageDiv.style.top = "0px";
+
+          // turn.js will position these pages automatically
+          pageDiv.appendChild(canvas);
+          document.getElementById("flipbookInner").appendChild(pageDiv);
+
           dbg("Page", pageNumber, "rendered at scale:", scale, "dpr:", dpr);
         });
       });
     }
 
-    // Button handlers for Prev/Next
-    document.getElementById("prevPage").addEventListener("click", function() {
-      if (flipbookInitialized) {
-        $("#flipbook").turn("previous");
-      }
-    });
-    document.getElementById("nextPage").addEventListener("click", function() {
-      if (flipbookInitialized) {
-        $("#flipbook").turn("next");
-      }
-    });
-
-    // Zoom In/Out
+    // Zoom
     document.getElementById("zoomIn").addEventListener("click", function() {
       baseScale = Math.min(maxScale, baseScale + scaleStep);
-      renderFlipbook(); // re-render with new scale
+      renderFlipbook();
     });
     document.getElementById("zoomOut").addEventListener("click", function() {
       baseScale = Math.max(minScale, baseScale - scaleStep);
-      renderFlipbook(); // re-render with new scale
+      renderFlipbook();
     });
 
     function updateZoomDisplay() {
@@ -329,10 +325,47 @@
       document.getElementById("zoomLevelDisplay").textContent = zoomPercent + "%";
     }
 
-    // If you want to re-render on window resize automatically, uncomment:
-    // window.addEventListener("resize", () => {
-    //   renderFlipbook();
-    // });
+    // Prev/Next
+    document.getElementById("prevPage").addEventListener("click", () => {
+      if (flipbookInitialized) {
+        $("#flipbookInner").turn("previous");
+      }
+    });
+    document.getElementById("nextPage").addEventListener("click", () => {
+      if (flipbookInitialized) {
+        $("#flipbookInner").turn("next");
+      }
+    });
+
+    // ----- Panning Logic (Desktop) -----
+    // We'll only allow panning if not mobile and if the user has zoomed in beyond 1.0
+    const flipbookInner = document.getElementById("flipbookInner");
+
+    flipbookInner.addEventListener("mousedown", (e) => {
+      if (isMobile) return; // skip on mobile
+      if (baseScale <= 1.0) return; // only pan if zoomed in
+
+      isPanning = true;
+      startX = e.clientX - panX;
+      startY = e.clientY - panY;
+      flipbookInner.style.cursor = "grabbing";
+    });
+
+    document.addEventListener("mouseup", () => {
+      isPanning = false;
+      flipbookInner.style.cursor = "grab";
+    });
+
+    document.addEventListener("mousemove", (e) => {
+      if (!isPanning) return;
+      panX = e.clientX - startX;
+      panY = e.clientY - startY;
+      updatePan();
+    });
+
+    function updatePan() {
+      flipbookInner.style.transform = `translate(${panX}px, ${panY}px)`;
+    }
   </script>
 </body>
 </html>
