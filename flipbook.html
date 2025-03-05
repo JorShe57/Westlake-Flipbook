@@ -187,25 +187,37 @@
       });
 
     // Render a single page into a canvas
-    function renderPage(pageNumber, scale) {
-      pdfDoc.getPage(pageNumber).then(function(page) {
-        const viewport = page.getViewport({ scale: scale });
-        const canvas = document.createElement("canvas");
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        const context = canvas.getContext("2d");
+    function renderPage(pageNumber) {
+  // Let's pick a baseScale of 2 for sharper text
+  const baseScale = 2;
 
-        const renderContext = {
-          canvasContext: context,
-          viewport: viewport,
-        };
+  pdfDoc.getPage(pageNumber).then(function(page) {
+    const devicePixelRatio = window.devicePixelRatio || 1;
+    const viewport = page.getViewport({ scale: baseScale });
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
 
-        page.render(renderContext).promise.then(function() {
-          document.getElementById("page-" + pageNumber).appendChild(canvas);
-          dbg("Rendered page:", pageNumber);
-        });
-      });
-    }
+    canvas.width = viewport.width * devicePixelRatio;
+    canvas.height = viewport.height * devicePixelRatio;
+    canvas.style.width = viewport.width + "px";
+    canvas.style.height = viewport.height + "px";
+
+    const transform = devicePixelRatio !== 1
+      ? [devicePixelRatio, 0, 0, devicePixelRatio, 0, 0]
+      : null;
+
+    const renderContext = {
+      canvasContext: context,
+      viewport: viewport,
+      transform: transform
+    };
+
+    page.render(renderContext).promise.then(function() {
+      document.getElementById("page-" + pageNumber).appendChild(canvas);
+      console.log("Page", pageNumber, "rendered at high DPI");
+    });
+  });
+}
 
     // Prev/Next Buttons
     document.getElementById("prevPage").addEventListener("click", function() {
