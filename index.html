@@ -2,55 +2,199 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>PDF Library</title>
+  <title>Westlake Flipbook Collection</title>
+  <!-- PDF.js scripts (for rendering the cover pages) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js"></script>
+
   <style>
+    /* Reset some default margins/padding */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
     body {
       font-family: sans-serif;
-      padding: 20px;
       background: #f4f4f4;
+      color: #333;
     }
-    h1 {
-      text-align: center;
+
+    /* Hero container with the city hall background */
+    .hero-container {
+      position: relative;
+      width: 100%;
+      min-height: 100vh; /* fill the screen vertically */
+      background: url("https://raw.githubusercontent.com/JorShe57/Westlake-Flipbook/main/IMG_0463.jpg") center center / cover no-repeat;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+    }
+
+    /* Heading text styling */
+    .hero-container h1 {
+      color: #fff;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.6);
       margin-bottom: 40px;
-    }
-    ul {
-      list-style-type: none;
-      padding: 0;
-      max-width: 600px;
-      margin: 0 auto;
-    }
-    li {
-      margin: 10px 0;
-      padding: 10px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
+      font-size: 2.5rem;
       text-align: center;
+    }
+
+    /* A container to hold the grid of PDF covers, with a background that stands out */
+    .pdf-grid-container {
+      background-color: rgba(255, 255, 255, 0.85); /* Slightly translucent white */
+      border-radius: 8px;
+      padding: 20px;
+      max-width: 1200px;
+      width: 100%;
+    }
+
+    /* The grid that holds each PDF cover */
+    .pdf-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 20px;
+      justify-items: center;
+      align-items: start;
+    }
+
+    /* Each PDF cover container */
+    .pdf-cover {
       background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      width: 180px;
+      text-align: center;
+      overflow: hidden;
+      transition: transform 0.2s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
     }
-    a {
+
+    .pdf-cover:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 6px 12px rgba(0,0,0,0.2);
+    }
+
+    /* The link that wraps the canvas cover */
+    .pdf-cover a {
       text-decoration: none;
-      color: #007acc;
-      font-size: 1.2em;
+      color: inherit;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 10px;
     }
-    a:hover {
-      text-decoration: underline;
+
+    /* The canvas (thumbnail) styling */
+    .pdf-cover canvas {
+      display: block;
+      width: 100%; /* Let the canvas scale to container width */
+      height: auto;
+      border-bottom: 1px solid #ddd;
+      margin-bottom: 8px;
+    }
+
+    /* PDF title styling */
+    .pdf-title {
+      font-size: 0.9rem;
+      font-weight: bold;
+      padding: 8px;
     }
   </style>
 </head>
 <body>
-  <h1>Welcome to the Westlake Flipbook Collection</h1>
-  <ul>
-    <!-- Use %20 for spaces, or rename your PDFs to remove spaces -->
-    <li>
-      <a href="flipbook.html?pdf=Tri-City%20Pickle%20Ball%20Courts.pdf">
-        Tri-City Pickle Ball Courts
-      </a>
-    </li>
-    <li>
-      <a href="flipbook.html?pdf=Newsletter%20March%20-%20April%20Draft.pdf">
-        Newsletter March - April Draft
-      </a>
-    </li>
-  </ul>
+
+  <div class="hero-container">
+    <h1>Welcome to the Westlake Flipbook Collection</h1>
+
+    <div class="pdf-grid-container">
+      <div class="pdf-grid">
+        <!-- The PDF covers will be generated here by JavaScript -->
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Configure PDF.js worker
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js";
+
+    // List of PDFs (you can add more up to 9 or beyond)
+    // 'title' is what appears under the cover, 'pdf' is the actual file name (URL-encoded if needed)
+    const pdfList = [
+      {
+        title: "Newsletter (March - April Draft)",
+        pdf: "Newsletter%20March%20-%20April%20Draft.pdf"
+      },
+      {
+        title: "Tri-City Pickle Ball Courts",
+        pdf: "Tri-City%20Pickle%20Ball%20Courts.pdf"
+      }
+      // Add more PDFs here:
+      // { title: "Another PDF", pdf: "Another%20File.pdf" },
+      // ...
+    ];
+
+    // We'll load the first page of each PDF at a small scale to act as a "cover."
+    // Then place the canvas + title in the grid.
+    async function loadPdfCovers() {
+      const grid = document.querySelector(".pdf-grid");
+
+      for (const item of pdfList) {
+        // 1) Create the container div
+        const coverDiv = document.createElement("div");
+        coverDiv.className = "pdf-cover";
+
+        // 2) Create a link to flipbook.html with the PDF param
+        const link = document.createElement("a");
+        link.href = `flipbook.html?pdf=${item.pdf}`;
+        coverDiv.appendChild(link);
+
+        // 3) Create a canvas for the PDF cover
+        const canvas = document.createElement("canvas");
+        link.appendChild(canvas);
+
+        // 4) Load the PDF and render the first page at a small scale
+        try {
+          const loadingTask = pdfjsLib.getDocument(item.pdf);
+          const pdfDoc = await loadingTask.promise;
+          const page = await pdfDoc.getPage(1);
+          const scale = 0.25; // adjust for bigger/smaller thumbnail
+          const viewport = page.getViewport({ scale });
+
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+
+          const context = canvas.getContext("2d");
+          const renderContext = {
+            canvasContext: context,
+            viewport: viewport
+          };
+          await page.render(renderContext).promise;
+        } catch (error) {
+          console.error("Error loading PDF cover:", item.pdf, error);
+        }
+
+        // 5) Add a title under the canvas
+        const titleDiv = document.createElement("div");
+        titleDiv.className = "pdf-title";
+        titleDiv.textContent = item.title;
+        coverDiv.appendChild(titleDiv);
+
+        // 6) Append the cover to the grid
+        grid.appendChild(coverDiv);
+      }
+    }
+
+    // On page load, generate all covers
+    document.addEventListener("DOMContentLoaded", loadPdfCovers);
+  </script>
 </body>
 </html>
