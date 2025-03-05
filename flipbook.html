@@ -30,7 +30,7 @@
       font-family: sans-serif;
     }
 
-    /* Navigation Buttons + Zoom Controls container */
+    /* Top Controls: Prev/Next + Zoom */
     .top-controls {
       display: flex;
       align-items: center;
@@ -76,23 +76,25 @@
       left: 0;
       background: #fff;
       overflow: hidden;
+      /* Let the user see a pointer near the corner for flipping */
+      cursor: default;
     }
 
-    /* Optional shadow for the canvas */
     .page canvas {
       box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
     }
 
-    /* Corner flipping cue: a small corner overlay in the bottom-right */
+    /* Optional corner flipping cue: remove pointer-events: none so corner grabs work fine */
     .page::after {
-      content: "Flip!";
+      content: "Flip";
       position: absolute;
       right: 5px;
       bottom: 5px;
       font-size: 0.8em;
       color: rgba(0,0,0,0.4);
-      pointer-events: none; /* don't block actual corner clicks */
       transform: rotate(-20deg);
+      /* no pointer-events: none needed, but we can keep it if we want to ensure the text doesn't block flips */
+      pointer-events: none; 
     }
     .page:hover::after {
       color: rgba(0,0,0,0.8);
@@ -144,8 +146,12 @@
   <div id="flipbook"></div>
 
   <footer>
-    <!-- Westlake Logo (adjust src as needed) -->
-    <img src="https://github.com/JorShe57/Westlake-Flipbook/blob/main/Logo%20w%20drop%20shadown%20updated.png" alt="Westlake Logo" class="westlake-logo">
+    <!-- Westlake Logo: update the src to a working path or GitHub raw URL -->
+    <img 
+      src="https://raw.githubusercontent.com/JorShe57/Westlake-Flipbook/main/westlake-logo.png" 
+      alt="Westlake Logo" 
+      class="westlake-logo"
+    >
     <!-- Return to Home Button -->
     <a href="index.html" class="home-button">Return to Home</a>
   </footer>
@@ -178,8 +184,8 @@
     let displayMode = isMobile ? "single" : "double";
     dbg("Initial display mode:", displayMode);
 
-    // We'll store our "base scale" in a variable so we can adjust via zoom
-    let baseScale = 1.5; // default
+    // 1) Set the initial zoom to 100% => baseScale = 1.0
+    let baseScale = 1.0;
     const minScale = 0.5;
     const maxScale = 3.0;
     const scaleStep = 0.25;
@@ -203,28 +209,30 @@
 
     // Render the entire flipbook
     function renderFlipbook() {
-      // 1) Destroy existing flipbook if it exists
+      // If there's already a flipbook, destroy it to avoid console errors
       if (flipbookInitialized) {
-        $("#flipbook").turn("destroy");
+        try {
+          $("#flipbook").turn("destroy");
+        } catch (e) {
+          dbg("Error destroying turn.js instance (might not be fatal):", e);
+        }
         document.getElementById("flipbook").innerHTML = "";
+        flipbookInitialized = false;
       }
 
-      // 2) We'll measure page 1 to figure out container sizing
+      // We'll measure page 1 to figure out container sizing
       pdfDoc.getPage(1).then(function(page) {
-        // We'll do a small trick: if it's mobile, we might do single page
+        // Re-check screen size in case the user resized
         displayMode = (window.innerWidth < 800) ? "single" : "double";
 
-        // We'll do a base scale measure
+        // Use baseScale
         const viewport = page.getViewport({ scale: baseScale });
         let pageWidth = viewport.width;
         let pageHeight = viewport.height;
 
-        // If double-page, total width is 2 * pageWidth
+        // Double-page => total width is 2 * pageWidth
         let totalWidth = (displayMode === "double") ? pageWidth * 2 : pageWidth;
         let totalHeight = pageHeight;
-
-        // We'll just let it appear at full baseScale (no auto fit)
-        // But if you prefer to fit to screen, you can add logic here.
 
         // Apply to #flipbook
         const flipbookDiv = document.getElementById("flipbook");
@@ -308,11 +316,11 @@
     // Zoom In/Out
     document.getElementById("zoomIn").addEventListener("click", function() {
       baseScale = Math.min(maxScale, baseScale + scaleStep);
-      renderFlipbook();
+      renderFlipbook(); // re-render with new scale
     });
     document.getElementById("zoomOut").addEventListener("click", function() {
       baseScale = Math.max(minScale, baseScale - scaleStep);
-      renderFlipbook();
+      renderFlipbook(); // re-render with new scale
     });
 
     function updateZoomDisplay() {
@@ -320,12 +328,10 @@
       document.getElementById("zoomLevelDisplay").textContent = zoomPercent + "%";
     }
 
-    window.addEventListener("resize", function() {
-      // If user resizes the window significantly, we might want to re-render
-      // especially if they switch from mobile <-> desktop width.
-      // This is optional. Uncomment if you want dynamic re-layout:
-      // renderFlipbook();
-    });
+    // If you want to re-render on window resize automatically, uncomment:
+    // window.addEventListener("resize", () => {
+    //   renderFlipbook();
+    // });
   </script>
 </body>
 </html>
