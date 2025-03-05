@@ -5,7 +5,7 @@
   <title>PDF Flipbook</title>
   <!-- jQuery (required for turn.js) -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <!-- turn.js for flipbook effect (v3) -->
+  <!-- turn.js for flipbook effect -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/turn.js/3/turn.min.js"></script>
   <!-- PDF.js for PDF rendering -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
@@ -28,9 +28,10 @@
       align-items: center;
       min-height: 100vh;
       font-family: sans-serif;
-      overflow: hidden; /* avoid scrollbars, rely on panning if zoomed in */
+      overflow: hidden;
     }
 
+    /* Top Controls */
     .top-controls {
       display: flex;
       align-items: center;
@@ -58,22 +59,22 @@
     .zoom-level {
       font-size: 1.1em;
       margin: 0 8px;
+      width: 40px;
+      text-align: right;
     }
 
-    /* Outer container for the flipbook */
+    /* Flipbook Container */
     #flipbook {
       position: relative;
       background: #999;
       margin-bottom: 20px;
-      overflow: hidden;
+      overflow: hidden; /* hides any overshoot */
     }
 
-    /* turn.js pages go here */
     .flipbook-inner {
       position: absolute;
-      left: 0; 
+      left: 0;
       top: 0;
-      transform: translate(0, 0);
     }
 
     .page {
@@ -84,9 +85,10 @@
       overflow: hidden;
     }
     .page canvas {
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
     }
 
+    /* Footer */
     footer {
       width: 100%;
       background: #222;
@@ -114,7 +116,10 @@
       transform: translateY(-2px);
     }
 
-    /* LOADING OVERLAY */
+    /* Loading Overlay */
+
+
+```html
     #loadingOverlay {
       position: fixed;
       top: 0; left: 0;
@@ -125,7 +130,7 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      z-index: 9999; /* above everything */
+      z-index: 9999;
       transition: opacity 0.3s;
     }
     #loadingOverlay img {
@@ -136,11 +141,6 @@
     #loadingOverlay p {
       color: #fff;
       font-size: 1.2em;
-    }
-
-    /* Pan Mode: highlight the flipbook border or change cursor */
-    .pan-active #flipbook .flipbook-inner {
-      cursor: grab;
     }
   </style>
 </head>
@@ -160,11 +160,8 @@
     <button id="nextPage">Next</button>
 
     <button id="zoomOut">-</button>
-    <span class="zoom-level" id="zoomLevelDisplay">100%</span>
+    <span class="zoom-level" id="zoomLevelDisplay">100</span><span>%</span>
     <button id="zoomIn">+</button>
-
-    <!-- Pan Mode Toggle -->
-    <button id="togglePan">Pan Mode: Off</button>
   </div>
 
   <div id="flipbook">
@@ -181,12 +178,12 @@
   </footer>
 
   <script>
-    // Debug log
+    // Simple debug logger
     function dbg(...args) {
       console.log("[Flipbook Debug]", ...args);
     }
 
-    // Read ?pdf=
+    // Utility to read ?pdf=
     function getQueryParam(param) {
       const params = new URLSearchParams(window.location.search);
       return params.get(param);
@@ -203,15 +200,15 @@
     pdfjsLib.GlobalWorkerOptions.workerSrc =
       "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js";
 
+    // Mobile vs. Desktop
     const isMobile = window.innerWidth < 800;
     // Single page on mobile, double page on desktop
     let displayMode = isMobile ? "single" : "double";
 
-    // If mobile, let's pick a bigger default scale so text is more readable
-    // If desktop, 1.0 is fine
-    let baseScale = isMobile ? 1.2 : 1.0;
+    // Scale: Start at 1.0 (100%)
+    let baseScale = 1.0;
     const minScale = 0.5;
-    const maxScale = 3.0;
+    const maxScale = 2.0;
     const scaleStep = 0.25;
 
     let flipbookInitialized = false;
@@ -219,15 +216,7 @@
     // Loading overlay
     const loadingOverlay = document.getElementById("loadingOverlay");
 
-    // Pan Mode
-    let panMode = false; // off by default
-    let isPanning = false;
-    let startX = 0, startY = 0;
-    let panX = 0, panY = 0;
-
-    const flipbookInner = document.getElementById("flipbookInner");
-
-    // Load PDF
+    // Load the PDF
     pdfjsLib.getDocument(pdfUrl).promise
       .then(function(pdf) {
         pdfDoc = pdf;
@@ -242,51 +231,50 @@
         loadingOverlay.style.display = "none";
       });
 
-    // Render or Re-render the entire flipbook
+    // Renders or re-renders the entire flipbook at the current baseScale
     function renderFlipbook() {
       // Show overlay
       loadingOverlay.style.display = "flex";
       loadingOverlay.style.opacity = "1";
 
-      // Destroy old flipbook if it exists
+      // Destroy old instance if any
       if (flipbookInitialized) {
         try {
           $("#flipbookInner").turn("destroy");
         } catch(e) {
-          dbg("Error destroying turn.js instance:", e);
+          dbg("Error destroying turn.js:", e);
         }
-        flipbookInner.innerHTML = "";
+        document.getElementById("flipbookInner").innerHTML = "";
         flipbookInitialized = false;
-        panX = 0; panY = 0;
-        updatePan();
       }
 
-      // Measure page 1 at baseScale
+      // Measure page 1 to figure out container sizing
       pdfDoc.getPage(1).then(page => {
         const viewport = page.getViewport({ scale: baseScale });
         const pageWidth = viewport.width;
         const pageHeight = viewport.height;
 
-        // Determine total width/height
+        // For double-page, total width = 2 * pageWidth
         const totalWidth = (displayMode === "double") ? pageWidth * 2 : pageWidth;
         const totalHeight = pageHeight;
 
-        // Set #flipbook size
+        // Set the flipbook container size
         const flipbookDiv = document.getElementById("flipbook");
         flipbookDiv.style.width = totalWidth + "px";
         flipbookDiv.style.height = totalHeight + "px";
 
+        const flipbookInner = document.getElementById("flipbookInner");
         flipbookInner.style.width = totalWidth + "px";
         flipbookInner.style.height = totalHeight + "px";
 
-        // Render all pages
+        // Render each page
         const tasks = [];
         for (let i = 1; i <= numPages; i++) {
           tasks.push(renderPage(i, baseScale, pageWidth, pageHeight));
         }
 
         Promise.all(tasks).then(() => {
-          // turn.js init
+          // Initialize turn.js
           $("#flipbookInner").turn({
             width: totalWidth,
             height: totalHeight,
@@ -322,6 +310,7 @@
         const canvas = document.createElement("canvas");
         const context = canvas.getContext("2d");
 
+        // High DPI rendering
         canvas.width = viewport.width * dpr;
         canvas.height = viewport.height * dpr;
         canvas.style.width = viewport.width + "px";
@@ -341,9 +330,9 @@
           pageDiv.id = `page-${pageNumber}`;
           pageDiv.style.width = pageWidth + "px";
           pageDiv.style.height = pageHeight + "px";
-          pageDiv.appendChild(canvas);
 
-          flipbookInner.appendChild(pageDiv);
+          pageDiv.appendChild(canvas);
+          document.getElementById("flipbookInner").appendChild(pageDiv);
 
           dbg("Page", pageNumber, "rendered at scale:", scale, "dpr:", dpr);
         });
@@ -360,9 +349,10 @@
       renderFlipbook();
     });
 
+    // Update Zoom Display
     function updateZoomDisplay() {
       const percent = Math.round(baseScale * 100);
-      document.getElementById("zoomLevelDisplay").textContent = percent + "%";
+      document.getElementById("zoomLevelDisplay").textContent = percent;
     }
 
     // Prev/Next
@@ -376,52 +366,6 @@
         $("#flipbookInner").turn("next");
       }
     });
-
-    // Pan Mode Toggle
-    const togglePanBtn = document.getElementById("togglePan");
-    togglePanBtn.addEventListener("click", () => {
-      panMode = !panMode;
-      togglePanBtn.textContent = `Pan Mode: ${panMode ? "On" : "Off"}`;
-      if (panMode) {
-        document.body.classList.add("pan-active");
-      } else {
-        document.body.classList.remove("pan-active");
-        // Reset pan
-        panX = 0; panY = 0;
-        updatePan();
-      }
-    });
-
-    // Panning
-    flipbookInner.addEventListener("mousedown", e => {
-      // Only pan if panMode is on and we're zoomed in
-      if (!panMode || baseScale <= 1.0) return;
-      e.preventDefault();
-      isPanning = true;
-      startX = e.clientX - panX;
-      startY = e.clientY - panY;
-      flipbookInner.style.cursor = "grabbing";
-    });
-
-    document.addEventListener("mousemove", e => {
-      if (!isPanning) return;
-      panX = e.clientX - startX;
-      panY = e.clientY - startY;
-      updatePan();
-    });
-
-    document.addEventListener("mouseup", () => {
-      isPanning = false;
-      if (panMode) {
-        flipbookInner.style.cursor = "grab";
-      } else {
-        flipbookInner.style.cursor = "default";
-      }
-    });
-
-    function updatePan() {
-      flipbookInner.style.transform = `translate(${panX}px, ${panY}px)`;
-    }
   </script>
 </body>
 </html>
