@@ -2,17 +2,23 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Flipbook (Mobile, Auto-Fit)</title>
+  <title>Flipbook (Mobile, Single-Page, Enhanced)</title>
+
+  <!-- Make the page responsive on mobile -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+
   <!-- jQuery (required for turn.js) -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <!-- Use your custom turn.js file -->
   <script src="turn.custom.js"></script>
 
   <style>
+    /* Basic resets */
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
+      -webkit-tap-highlight-color: transparent; /* prevent tap highlight on mobile */
     }
     body {
       background: #333;
@@ -21,27 +27,30 @@
       flex-direction: column;
       align-items: center;
       min-height: 100vh;
-      font-family: sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       overflow: hidden;
     }
 
     .top-controls {
       display: flex;
       align-items: center;
-      justify-content: center;
-      gap: 15px;
-      margin: 20px;
-      z-index: 10;
+      justify-content: space-evenly;
+      gap: 12px;
+      margin: 10px 0;
+      width: 100%;
+      max-width: 500px;
     }
     button {
       background: #007acc;
       color: #fff;
       border: none;
-      padding: 10px 16px;
+      padding: 8px 12px;
       font-size: 1em;
       border-radius: 4px;
       cursor: pointer;
       transition: background 0.3s, transform 0.2s;
+      min-width: 60px;
+      text-align: center;
     }
     button:hover {
       background: #005fa3;
@@ -50,21 +59,22 @@
     .zoom-level {
       font-size: 1.1em;
       margin: 0 8px;
-      width: 40px;
+      width: 42px;
       text-align: right;
     }
 
+    /* Flipbook container */
     #flipbook {
       position: relative;
       background: #999;
-      margin-bottom: 20px;
+      margin-bottom: 10px;
       overflow: hidden;
     }
     .flipbook-inner {
       position: absolute;
-      left: 0;
+      left: 0; 
       top: 0;
-      transform-origin: 0 0;
+      transform-origin: 0 0; /* pivot top-left for scale */
     }
     .page {
       position: absolute;
@@ -72,19 +82,27 @@
       left: 0;
       background: #fff;
       overflow: hidden;
+      border-radius: 6px; /* slightly rounded corners on pages */
     }
     .page img {
       width: 100%;
       height: auto;
       display: block;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    }
+
+    /* Footer or extra spacing if needed */
+    .footer-space {
+      height: 30px;
+      width: 100%;
     }
   </style>
 </head>
 <body>
 
+  <!-- Top controls for flipping & zooming -->
   <div class="top-controls">
-    <button id="prevPage">Previous</button>
+    <button id="prevPage">Prev</button>
     <button id="nextPage">Next</button>
 
     <button id="zoomOut">-</button>
@@ -96,12 +114,15 @@
     <div class="flipbook-inner" id="flipbookInner"></div>
   </div>
 
+  <!-- Optional extra space at bottom so controls aren't too close to phone edges -->
+  <div class="footer-space"></div>
+
   <script>
-    // Single-page images
+    // Example array of images for single-page mobile flipbook
     const imagePages = [
       "images/mobile_page1.jpg",
-      "images/mobile_page2.jpg"
-      // etc...
+      "images/mobile_page2.jpg",
+      // add more as needed
     ];
 
     let flipbookInitialized = false;
@@ -109,14 +130,15 @@
     // Container scale for manual zoom
     let baseScale = 1.0;
     const minScale = 0.5;
-    const maxScale = 2.0;
+    const maxScale = 3.0;    // allow a bit more zoom on mobile
     const scaleStep = 0.25;
 
-    // Single-page
+    // Single-page mode
     const displayMode = "single";
 
     window.addEventListener("DOMContentLoaded", () => {
       loadImagesAndInitFlipbook();
+      setupEvents();
     });
 
     function loadImagesAndInitFlipbook() {
@@ -137,31 +159,38 @@
 
       const flipbookInner = document.getElementById("flipbookInner");
 
-      // Measure first image
+      // We'll measure the first image to auto-fit
       const firstImg = new Image();
       firstImg.onload = function() {
         const pageWidth = firstImg.naturalWidth;
         const pageHeight = firstImg.naturalHeight;
 
-        // Single-page => totalWidth = pageWidth
+        // Single-page => contentWidth = pageWidth
         const contentWidth = pageWidth;
         const contentHeight = pageHeight;
 
-        // Available screen
-        const maxW = window.innerWidth * 0.9;
-        const maxH = window.innerHeight * 0.8;
+        // Available screen (slightly smaller than full to keep margins)
+        const maxW = window.innerWidth * 0.95;
+        const maxH = window.innerHeight * 0.75;
 
+        // Aspect ratios
         const contentAspect = contentWidth / contentHeight;
         const screenAspect = maxW / maxH;
 
         let finalWidth, finalHeight;
         if (contentAspect > screenAspect) {
+          // content is "wider"
           finalWidth = maxW;
           finalHeight = maxW / contentAspect;
         } else {
+          // content is "taller"
           finalHeight = maxH;
           finalWidth = maxH * contentAspect;
         }
+
+        // Round to integer to avoid fractional pixel issues
+        finalWidth = Math.round(finalWidth);
+        finalHeight = Math.round(finalHeight);
 
         // Set #flipbook size
         const flipbookDiv = document.getElementById("flipbook");
@@ -185,56 +214,65 @@
           flipbookInner.appendChild(pageDiv);
         }
 
-        // turn.js init
+        // Initialize turn.js
         $("#flipbookInner").turn({
           width: finalWidth,
           height: finalHeight,
           autoCenter: true,
-          display: displayMode,
+          display: displayMode, // single-page
           elevation: 50,
           gradients: true,
-          duration: 1200
+          duration: 800,  // slightly faster flip on mobile
+          when: {
+            turned: function(e, page) {
+              console.log("Page turned to:", page);
+            }
+          }
         });
 
         flipbookInitialized = true;
         updateZoomDisplay();
       };
 
+      // Start loading
       firstImg.src = imagePages[0];
     }
 
-    function applyScale(scale) {
-      document.getElementById("flipbookInner").style.transform = `scale(${scale})`;
+    function setupEvents() {
+      // Zoom
+      document.getElementById("zoomIn").addEventListener("click", () => {
+        baseScale = Math.min(maxScale, baseScale + scaleStep);
+        applyScale(baseScale);
+        updateZoomDisplay();
+      });
+      document.getElementById("zoomOut").addEventListener("click", () => {
+        baseScale = Math.max(minScale, baseScale - scaleStep);
+        applyScale(baseScale);
+        updateZoomDisplay();
+      });
+
+      // Prev/Next
+      document.getElementById("prevPage").addEventListener("click", () => {
+        if (flipbookInitialized) {
+          $("#flipbookInner").turn("previous");
+        }
+      });
+      document.getElementById("nextPage").addEventListener("click", () => {
+        if (flipbookInitialized) {
+          $("#flipbookInner").turn("next");
+        }
+      });
     }
 
-    // Zoom
-    document.getElementById("zoomIn").addEventListener("click", () => {
-      baseScale = Math.min(maxScale, baseScale + scaleStep);
-      applyScale(baseScale);
-      updateZoomDisplay();
-    });
-    document.getElementById("zoomOut").addEventListener("click", () => {
-      baseScale = Math.max(minScale, baseScale - scaleStep);
-      applyScale(baseScale);
-      updateZoomDisplay();
-    });
+    function applyScale(scale) {
+      // Just scale the container
+      document.getElementById("flipbookInner").style.transform = `scale(${scale})`;
+    }
 
     function updateZoomDisplay() {
       const percent = Math.round(baseScale * 100);
       document.getElementById("zoomLevelDisplay").textContent = percent;
     }
-
-    // Prev/Next
-    document.getElementById("prevPage").addEventListener("click", () => {
-      if (flipbookInitialized) {
-        $("#flipbookInner").turn("previous");
-      }
-    });
-    document.getElementById("nextPage").addEventListener("click", () => {
-      if (flipbookInitialized) {
-        $("#flipbookInner").turn("next");
-      }
-    });
   </script>
 </body>
 </html>
