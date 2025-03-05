@@ -25,6 +25,7 @@
       font-family: sans-serif;
     }
 
+    /* Navigation Buttons */
     .nav-buttons {
       margin: 10px;
     }
@@ -35,19 +36,28 @@
       cursor: pointer;
     }
 
+    /* The flipbook container MUST be position: relative 
+       so turn.js can place pages absolutely inside it */
     #flipbook {
-      background: #999; /* visible background behind pages */
+      position: relative;
+      background: #999; /* Just a background color behind the pages */
       margin-bottom: 20px;
-      /* We'll set the width & height dynamically via JS */
+      /* Width/height set in JS */
+      overflow: hidden; /* Hide any overflow from page animations */
     }
 
+    /* Each page is absolutely positioned at top-left
+       so they can be placed side by side by turn.js */
     .page {
+      position: absolute;
+      top: 0;
+      left: 0;
       background: #fff;
       overflow: hidden;
-      /* Each page’s width/height also set dynamically */
+      /* width/height also set in JS */
     }
 
-    /* Just to show a box shadow around pages (optional) */
+    /* Optional shadow around each page's canvas for a "magazine" feel */
     .page canvas {
       box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
     }
@@ -79,7 +89,7 @@
     let pdfDoc = null;
     let numPages = 0;
 
-    // If none provided, default to Tri-City
+    // If none provided, default
     const pdfUrl = getQueryParam("pdf") || "Tri-City%20Pickle%20Ball%20Courts.pdf";
     dbg("Loading PDF:", pdfUrl);
 
@@ -87,9 +97,10 @@
     pdfjsLib.GlobalWorkerOptions.workerSrc =
       "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js";
 
-    // Single-page mode on narrow screens, double-page on wider screens
+    // Decide single vs. double page based on screen width
     const isMobile = window.innerWidth < 800;
     const displayMode = isMobile ? "single" : "double";
+
     dbg("Display mode:", displayMode);
 
     pdfjsLib.getDocument(pdfUrl).promise
@@ -98,10 +109,11 @@
         numPages = pdf.numPages;
         dbg("PDF loaded. Pages =", numPages);
 
-        // We'll measure page 1 to set overall size
+        // Measure page 1 to figure out sizing
         return pdf.getPage(1);
       })
       .then(function(page) {
+        // Base scale for page rendering
         const baseScale = 1.5;
         const viewport = page.getViewport({ scale: baseScale });
         let pageWidth = viewport.width;
@@ -109,7 +121,7 @@
 
         dbg("Base page size (scale=1.5):", pageWidth, "x", pageHeight);
 
-        // If double-page, total width is double
+        // If double-page, total width is 2 * pageWidth
         let totalWidth = (displayMode === "double") ? pageWidth * 2 : pageWidth;
         let totalHeight = pageHeight;
 
@@ -117,11 +129,12 @@
         const maxWidth = window.innerWidth * 0.9;
         const maxHeight = window.innerHeight * 0.8;
 
-        // Compute scale factor to fit both width & height
+        // Compute ratio to fit both width & height
         const widthRatio = maxWidth / totalWidth;
         const heightRatio = maxHeight / totalHeight;
         const finalRatio = Math.min(widthRatio, heightRatio, 1);
 
+        // Final scale
         const finalScale = baseScale * finalRatio;
         dbg("Scale ratio:", finalRatio.toFixed(2), "| finalScale:", finalScale.toFixed(2));
 
@@ -158,10 +171,10 @@
           height: totalHeight,
           autoCenter: true,
           display: displayMode,
-          elevation: 50,     // adds a 3D "height" to page turning
-          gradients: true,   // show gradients during page flip
-          duration: 1200,    // slow down the flip (ms)
-          // cover: true,    // uncomment if you want page 1 to be a cover on the right
+          elevation: 50,   // 3D "height" to the page turning
+          gradients: true, // show gradients during flips
+          duration: 1200,  // slow flip
+          // cover: true,   // uncomment if you want page 1 alone on the right
           when: {
             turned: function(e, page) {
               dbg("Page turned to:", page);
