@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Flipbook (Desktop, Images)</title>
+  <title>Flipbook (Mobile, Images)</title>
   <!-- jQuery (required for turn.js) -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
-  <!-- Use your custom turn.js file instead of the old CDN link -->
+  <!-- Use your custom turn.js file -->
   <script src="turn.custom.js"></script>
 
   <style>
@@ -66,7 +66,7 @@
       position: absolute;
       left: 0; 
       top: 0;
-      transform-origin: 0 0; /* so scale pivot is top-left */
+      transform-origin: 0 0; /* pivot top-left for scale */
     }
     .page {
       position: absolute;
@@ -136,6 +136,7 @@
 </head>
 <body>
 
+  <!-- Optional loading screen -->
   <div id="loadingOverlay">
     <img 
       src="https://github.com/JorShe57/Westlake-Flipbook/blob/main/Logo%20w%20drop%20shadown%20updated.png" 
@@ -169,14 +170,14 @@
   <script>
     // Debug logger
     function dbg(...args) {
-      console.log("[Flipbook Desktop Images]", ...args);
+      console.log("[Flipbook Mobile Images]", ...args);
     }
 
-    // Instead of PDFs, let's define an array of image paths
+    // An array of images for your single-page flipbook
     const imagePages = [
-      "images/page_01.jpg",
-      "images/page_02.jpg",
-      "images/page_03.jpg"
+      "images/page1.jpg",
+      "images/page2.jpg",
+      "images/page3.jpg"
       // etc...
     ];
 
@@ -188,10 +189,9 @@
     const maxScale = 2.0;
     const scaleStep = 0.25;
 
-    // For demonstration, let's do double-page (like a magazine)
-    const displayMode = "double";
+    // Single-page mode for mobile
+    const displayMode = "single";
 
-    // On page load
     window.addEventListener("DOMContentLoaded", () => {
       loadImagesAndInitFlipbook();
     });
@@ -201,7 +201,7 @@
       loadingOverlay.style.display = "flex";
       loadingOverlay.style.opacity = "1";
 
-      // If we previously initialized, destroy and clear old pages
+      // If we previously initialized, destroy old flipbook
       if (flipbookInitialized) {
         try {
           $("#flipbookInner").turn("destroy");
@@ -212,21 +212,18 @@
         flipbookInitialized = false;
       }
 
-      // We'll create .page divs for each image
       const flipbookInner = document.getElementById("flipbookInner");
 
-      // Let's assume all images have the same dimension
-      // We can measure the first image to figure out the width/height
+      // Measure first image to get width/height
       const firstImg = new Image();
       firstImg.onload = function() {
-        let pageWidth = firstImg.naturalWidth;
-        let pageHeight = firstImg.naturalHeight;
+        const pageWidth = firstImg.naturalWidth;
+        const pageHeight = firstImg.naturalHeight;
 
-        // If double-page, total width is 2 * pageWidth
-        const totalWidth = (displayMode === "double") ? pageWidth * 2 : pageWidth;
+        // If single-page, totalWidth = pageWidth
+        const totalWidth = pageWidth;
         const totalHeight = pageHeight;
 
-        // Set #flipbook size
         const flipbookDiv = document.getElementById("flipbook");
         flipbookDiv.style.width = totalWidth + "px";
         flipbookDiv.style.height = totalHeight + "px";
@@ -248,12 +245,12 @@
           flipbookInner.appendChild(pageDiv);
         }
 
-        // Now initialize turn.js
+        // Initialize turn.js
         $("#flipbookInner").turn({
           width: totalWidth,
           height: totalHeight,
           autoCenter: true,
-          display: displayMode,
+          display: displayMode, // single-page
           elevation: 50,
           gradients: true,
           duration: 1200,
@@ -274,18 +271,17 @@
         }, 300);
       };
 
-      // Trigger image load
+      // Start loading
       firstImg.src = imagePages[0];
     }
 
-    // Basic container scale approach
-    // We'll do a simple transform on .flipbook-inner
+    // Basic container scale
     function applyScale(scale) {
       const flipbookInner = document.getElementById("flipbookInner");
       flipbookInner.style.transform = `scale(${scale})`;
     }
 
-    // Zoom controls
+    // Zoom In/Out
     document.getElementById("zoomIn").addEventListener("click", () => {
       baseScale = Math.min(maxScale, baseScale + scaleStep);
       applyScale(baseScale);
