@@ -57,7 +57,6 @@
       text-align: right;
     }
 
-    /* Flipbook container */
     #flipbook {
       position: relative;
       background: #999;
@@ -68,6 +67,7 @@
       position: absolute;
       left: 0; 
       top: 0;
+      transform: translate(0,0);
     }
     .page {
       position: absolute;
@@ -130,6 +130,11 @@
       color: #fff;
       font-size: 1.2em;
     }
+
+    /* Pan Mode styling */
+    .pan-active #flipbook .flipbook-inner {
+      cursor: grab;
+    }
   </style>
 </head>
 <body>
@@ -149,6 +154,9 @@
     <button id="zoomOut">-</button>
     <span class="zoom-level" id="zoomLevelDisplay">100</span><span>%</span>
     <button id="zoomIn">+</button>
+
+    <!-- Pan Mode Toggle -->
+    <button id="togglePan">Pan Mode: Off</button>
   </div>
 
   <div id="flipbook">
@@ -157,7 +165,7 @@
 
   <footer>
     <img 
-      src="https://raw.githubusercontent.com/JorShe57/Westlake-Flipbook/main/westlake-logo.png" 
+      src="https://github.com/JorShe57/Westlake-Flipbook/blob/main/Logo%20w%20drop%20shadown%20updated.png" 
       alt="Westlake Logo" 
       class="westlake-logo"
     >
@@ -176,7 +184,7 @@
     let pdfDoc = null;
     let numPages = 0;
 
-    // Always double-page for desktop
+    // Double-page mode for desktop
     const displayMode = "double";
 
     // Base scale 1.0 (100%)
@@ -187,6 +195,12 @@
 
     let flipbookInitialized = false;
 
+    // Pan mode
+    let panMode = false;
+    let isPanning = false;
+    let startX = 0, startY = 0;
+    let panX = 0, panY = 0;
+
     const pdfUrl = getQueryParam("pdf") || "Tri-City%20Pickle%20Ball%20Courts.pdf";
     dbg("Loading PDF:", pdfUrl);
 
@@ -194,6 +208,7 @@
       "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js";
 
     const loadingOverlay = document.getElementById("loadingOverlay");
+    const flipbookInner = document.getElementById("flipbookInner");
 
     pdfjsLib.getDocument(pdfUrl).promise
       .then(pdf => {
@@ -208,7 +223,6 @@
       });
 
     function renderFlipbook() {
-      // Show overlay
       loadingOverlay.style.display = "flex";
       loadingOverlay.style.opacity = "1";
 
@@ -218,17 +232,18 @@
         } catch(e) {
           dbg("Error destroying turn.js:", e);
         }
-        document.getElementById("flipbookInner").innerHTML = "";
+        flipbookInner.innerHTML = "";
         flipbookInitialized = false;
+        panX = 0; panY = 0;
+        updatePan();
       }
 
-      // Measure page 1
       pdfDoc.getPage(1).then(page => {
         const viewport = page.getViewport({ scale: baseScale });
         const pageWidth = viewport.width;
         const pageHeight = viewport.height;
 
-        // Double page => totalWidth = 2 * pageWidth
+        // Double-page => totalWidth = 2 * pageWidth
         const totalWidth = pageWidth * 2;
         const totalHeight = pageHeight;
 
@@ -236,7 +251,6 @@
         flipbookDiv.style.width = totalWidth + "px";
         flipbookDiv.style.height = totalHeight + "px";
 
-        const flipbookInner = document.getElementById("flipbookInner");
         flipbookInner.style.width = totalWidth + "px";
         flipbookInner.style.height = totalHeight + "px";
 
@@ -246,7 +260,6 @@
         }
 
         Promise.all(tasks).then(() => {
-          // turn.js init
           $("#flipbookInner").turn({
             width: totalWidth,
             height: totalHeight,
@@ -265,7 +278,6 @@
           flipbookInitialized = true;
           updateZoomDisplay();
 
-          // Hide overlay
           loadingOverlay.style.opacity = "0";
           setTimeout(() => {
             loadingOverlay.style.display = "none";
@@ -302,7 +314,7 @@
           pageDiv.style.height = pageHeight + "px";
 
           pageDiv.appendChild(canvas);
-          document.getElementById("flipbookInner").appendChild(pageDiv);
+          flipbookInner.appendChild(pageDiv);
 
           dbg("Page", pageNumber, "rendered at scale:", scale, "dpr:", dpr);
         });
@@ -311,11 +323,11 @@
 
     // Zoom
     document.getElementById("zoomIn").addEventListener("click", () => {
-      baseScale = Math.min(maxScale, baseScale + 0.25);
+      baseScale = Math.min(maxScale, baseScale + scaleStep);
       renderFlipbook();
     });
     document.getElementById("zoomOut").addEventListener("click", () => {
-      baseScale = Math.max(minScale, baseScale - 0.25);
+      baseScale = Math.max(minScale, baseScale - scaleStep);
       renderFlipbook();
     });
 
@@ -335,6 +347,51 @@
         $("#flipbookInner").turn("next");
       }
     });
+
+    // Pan Mode Toggle
+    const togglePanBtn = document.getElementById("togglePan");
+    togglePanBtn.addEventListener("click", () => {
+      panMode = !panMode;
+      togglePanBtn.textContent = `Pan Mode: ${panMode ? "On" : "Off"}`;
+      if (panMode) {
+        document.body.classList.add("pan-active");
+      } else {
+        document.body.classList.remove("pan-active");
+        // reset pan
+        panX = 0; panY = 0;
+        updatePan();
+      }
+    });
+
+    // Panning
+    flipbookInner.addEventListener("mousedown", e => {
+      if (!panMode) return; // only if Pan Mode is on
+      e.preventDefault();
+      isPanning = true;
+      startX = e.clientX - panX;
+      startY = e.clientY - panY;
+      flipbookInner.style.cursor = "grabbing";
+    });
+
+    document.addEventListener("mousemove", e => {
+      if (!isPanning) return;
+      panX = e.clientX - startX;
+      panY = e.clientY - startY;
+      updatePan();
+    });
+
+    document.addEventListener("mouseup", () => {
+      isPanning = false;
+      if (panMode) {
+        flipbookInner.style.cursor = "grab";
+      } else {
+        flipbookInner.style.cursor = "default";
+      }
+    });
+
+    function updatePan() {
+      flipbookInner.style.transform = `translate(${panX}px, ${panY}px)`;
+    }
   </script>
 </body>
 </html>
