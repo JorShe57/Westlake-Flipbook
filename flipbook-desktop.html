@@ -1,11 +1,10 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Flipbook (Desktop, Images)</title>
+  <title>Flipbook (Desktop, Multiple Flipbooks)</title>
   <!-- jQuery (required for turn.js) -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-
   <!-- Use your custom turn.js file -->
   <script src="turn.custom.js"></script>
 
@@ -25,7 +24,6 @@
       font-family: sans-serif;
       overflow: hidden;
     }
-
     .top-controls {
       display: flex;
       align-items: center;
@@ -64,9 +62,8 @@
     }
     .flipbook-inner {
       position: absolute;
-      left: 0; 
+      left: 0;
       top: 0;
-      /* We may scale or pan this container */
       transform-origin: 0 0;
     }
     .page {
@@ -110,30 +107,6 @@
       transform: translateY(-2px);
     }
 
-    /* Loading overlay (if you want to keep a loading screen) */
-    #loadingOverlay {
-      position: fixed;
-      top: 0; left: 0;
-      width: 100%;
-      height: 100%;
-      background: #333;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      z-index: 9999;
-      transition: opacity 0.3s;
-    }
-    #loadingOverlay img {
-      width: 120px;
-      height: auto;
-      margin-bottom: 20px;
-    }
-    #loadingOverlay p {
-      color: #fff;
-      font-size: 1.2em;
-    }
-
     /* Pan Mode styling */
     .pan-active #flipbook .flipbook-inner {
       cursor: grab;
@@ -142,16 +115,6 @@
 </head>
 <body>
 
-  <!-- Optional loading screen (if needed) -->
-  <div id="loadingOverlay">
-    <img 
-      src="https://github.com/JorShe57/Westlake-Flipbook/blob/main/Logo%20w%20drop%20shadown%20updated.png" 
-      alt="Loading Logo"
-    >
-    <p>Loading...</p>
-  </div>
-
-  <!-- Controls -->
   <div class="top-controls">
     <button id="prevPage">Previous</button>
     <button id="nextPage">Next</button>
@@ -164,7 +127,6 @@
     <button id="togglePan">Pan Mode: Off</button>
   </div>
 
-  <!-- Flipbook Container -->
   <div id="flipbook">
     <div class="flipbook-inner" id="flipbookInner"></div>
   </div>
@@ -179,69 +141,81 @@
   </footer>
 
   <script>
-    // Debug logger
-    function dbg(...args) {
-      console.log("[Flipbook Desktop Images]", ...args);
+    // 1) Dictionary of your multiple flipbooks
+    const flipbooks = {
+      newsletter: [
+        "https://raw.githubusercontent.com/JorShe57/Westlake-Flipbook/main/Newsletter%20March%20-%20April%20Draft_Page_1.jpg",
+        "https://raw.githubusercontent.com/JorShe57/Westlake-Flipbook/main/Newsletter%20March%20-%20April%20Draft_Page_2.jpg",
+        "https://raw.githubusercontent.com/JorShe57/Westlake-Flipbook/main/Newsletter%20March%20-%20April%20Draft_Page_3.jpg",
+        "https://raw.githubusercontent.com/JorShe57/Westlake-Flipbook/main/Newsletter%20March%20-%20April%20Draft_Page_4.jpg"
+      ],
+      pickleball: [
+        "https://raw.githubusercontent.com/JorShe57/Westlake-Flipbook/main/Tri-City%20Pickle%20Ball%20Courts_Page_1.jpg",
+        "https://raw.githubusercontent.com/JorShe57/Westlake-Flipbook/main/Tri-City%20Pickle%20Ball%20Courts_Page_2.jpg",
+        "https://raw.githubusercontent.com/JorShe57/Westlake-Flipbook/main/Tri-City%20Pickle%20Ball%20Courts_Page_3.jpg",
+        "https://raw.githubusercontent.com/JorShe57/Westlake-Flipbook/main/Tri-City%20Pickle%20Ball%20Courts_Page_4.jpg",
+        "https://raw.githubusercontent.com/JorShe57/Westlake-Flipbook/main/Tri-City%20Pickle%20Ball%20Courts_Page_5.jpg",
+        "https://raw.githubusercontent.com/JorShe57/Westlake-Flipbook/main/Tri-City%20Pickle%20Ball%20Courts_Page_6.jpg",
+        "https://raw.githubusercontent.com/JorShe57/Westlake-Flipbook/main/Tri-City%20Pickle%20Ball%20Courts_Page_7.jpg",
+        "https://raw.githubusercontent.com/JorShe57/Westlake-Flipbook/main/Tri-City%20Pickle%20Ball%20Courts_Page_8.jpg"
+      ]
+    };
+
+    // 2) Read ?flipbook=someKey from the URL
+    function getQueryParam(param) {
+      const params = new URLSearchParams(window.location.search);
+      return params.get(param);
     }
+    const flipbookKey = getQueryParam("flipbook") || "newsletter"; // default if none
+    const imagePages = flipbooks[flipbookKey] || [];
 
-    // An array of images for your double-page flipbook
-    const imagePages = [
-      "images/page1.jpg",
-      "images/page2.jpg",
-      "images/page3.jpg"
-      // Add as many as needed
-    ];
-
-    // We'll do double-page mode
+    // 3) Basic double-page
     const displayMode = "double";
-
     let flipbookInitialized = false;
 
-    // Basic container scale approach
+    // Container scale for zoom
     let baseScale = 1.0;
     const minScale = 0.5;
     const maxScale = 2.0;
     const scaleStep = 0.25;
 
-    // Pan mode variables
+    // Pan mode
     let panMode = false;
     let isPanning = false;
     let startX = 0, startY = 0;
     let panX = 0, panY = 0;
 
+    // On DOM load
     window.addEventListener("DOMContentLoaded", () => {
       loadImagesAndInitFlipbook();
     });
 
     function loadImagesAndInitFlipbook() {
-      const loadingOverlay = document.getElementById("loadingOverlay");
-      loadingOverlay.style.display = "flex";
-      loadingOverlay.style.opacity = "1";
-
-      // If previously initialized, destroy old flipbook
+      // If previously init, destroy
       if (flipbookInitialized) {
         try {
           $("#flipbookInner").turn("destroy");
         } catch(e) {
-          dbg("Error destroying turn.js:", e);
+          console.log("Error destroying turn.js:", e);
         }
         document.getElementById("flipbookInner").innerHTML = "";
         flipbookInitialized = false;
       }
 
       const flipbookInner = document.getElementById("flipbookInner");
+      if (imagePages.length === 0) {
+        console.error("No images found for flipbook key:", flipbookKey);
+        return;
+      }
 
-      // We'll measure the first image to figure out page size
+      // Measure first image
       const firstImg = new Image();
       firstImg.onload = function() {
         const pageWidth = firstImg.naturalWidth;
         const pageHeight = firstImg.naturalHeight;
-
-        // If double-page, total width = 2 * pageWidth
         const totalWidth = (displayMode === "double") ? pageWidth * 2 : pageWidth;
         const totalHeight = pageHeight;
 
-        // Set #flipbook size
         const flipbookDiv = document.getElementById("flipbook");
         flipbookDiv.style.width = totalWidth + "px";
         flipbookDiv.style.height = totalHeight + "px";
@@ -249,7 +223,7 @@
         flipbookInner.style.width = totalWidth + "px";
         flipbookInner.style.height = totalHeight + "px";
 
-        // Create pages for each image
+        // Create .page divs for each image
         for (let i = 0; i < imagePages.length; i++) {
           const pageDiv = document.createElement("div");
           pageDiv.className = "page";
@@ -263,7 +237,7 @@
           flipbookInner.appendChild(pageDiv);
         }
 
-        // Initialize turn.js
+        // Init turn.js
         $("#flipbookInner").turn({
           width: totalWidth,
           height: totalHeight,
@@ -274,32 +248,24 @@
           duration: 1200,
           when: {
             turned: function(e, page) {
-              dbg("Page turned to:", page);
+              console.log("Page turned to:", page);
             }
           }
         });
 
         flipbookInitialized = true;
-        updateZoomDisplay();
-
-        // Hide overlay
-        loadingOverlay.style.opacity = "0";
-        setTimeout(() => {
-          loadingOverlay.style.display = "none";
-        }, 300);
       };
 
       // Trigger load
       firstImg.src = imagePages[0];
     }
 
-    // We can scale the .flipbook-inner container for a basic zoom
     function applyScale(scale) {
       const flipbookInner = document.getElementById("flipbookInner");
       flipbookInner.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
     }
 
-    // Zoom In/Out
+    // Zoom
     document.getElementById("zoomIn").addEventListener("click", () => {
       baseScale = Math.min(maxScale, baseScale + scaleStep);
       applyScale(baseScale);
@@ -346,9 +312,6 @@
 
     // Panning logic
     const flipbookInner = document.getElementById("flipbookInner");
-    let isPanning = false;
-    let startX = 0, startY = 0;
-
     flipbookInner.addEventListener("mousedown", e => {
       if (!panMode) return;
       e.preventDefault();
