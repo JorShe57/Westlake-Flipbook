@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Flipbook (Mobile, Single-Page, Enhanced)</title>
+  <title>Flipbook (Mobile, Single-Page)</title>
 
   <!-- Make the page responsive on mobile -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
@@ -31,14 +31,30 @@
       overflow: hidden;
     }
 
+    /* Top controls: Home, Prev, Next, Zoom */
     .top-controls {
       display: flex;
       align-items: center;
       justify-content: space-evenly;
-      gap: 12px;
+      gap: 10px;
       margin: 10px 0;
       width: 100%;
       max-width: 500px;
+    }
+    .top-controls a.home-button {
+      background: #007acc;
+      color: #fff;
+      text-decoration: none;
+      padding: 8px 12px;
+      font-size: 1em;
+      border-radius: 4px;
+      transition: background 0.3s, transform 0.2s;
+      min-width: 60px;
+      text-align: center;
+    }
+    .top-controls a.home-button:hover {
+      background: #005fa3;
+      transform: translateY(-2px);
     }
     button {
       background: #007acc;
@@ -58,7 +74,7 @@
     }
     .zoom-level {
       font-size: 1.1em;
-      margin: 0 8px;
+      margin: 0 4px;
       width: 42px;
       text-align: right;
     }
@@ -91,7 +107,7 @@
       box-shadow: 0 2px 6px rgba(0,0,0,0.3);
     }
 
-    /* Footer or extra spacing if needed */
+    /* Optional extra space at bottom */
     .footer-space {
       height: 30px;
       width: 100%;
@@ -100,8 +116,9 @@
 </head>
 <body>
 
-  <!-- Top controls for flipping & zooming -->
+  <!-- Top controls -->
   <div class="top-controls">
+    <a href="index.html" class="home-button">Home</a>
     <button id="prevPage">Prev</button>
     <button id="nextPage">Next</button>
 
@@ -114,14 +131,13 @@
     <div class="flipbook-inner" id="flipbookInner"></div>
   </div>
 
-  <!-- Optional extra space at bottom so controls aren't too close to phone edges -->
   <div class="footer-space"></div>
 
   <script>
     // Example array of images for single-page mobile flipbook
     const imagePages = [
       "images/mobile_page1.jpg",
-      "images/mobile_page2.jpg",
+      "images/mobile_page2.jpg"
       // add more as needed
     ];
 
@@ -130,7 +146,7 @@
     // Container scale for manual zoom
     let baseScale = 1.0;
     const minScale = 0.5;
-    const maxScale = 3.0;    // allow a bit more zoom on mobile
+    const maxScale = 3.0;    // allow more zoom on mobile
     const scaleStep = 0.25;
 
     // Single-page mode
