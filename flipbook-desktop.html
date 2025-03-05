@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Flipbook (Desktop, Auto-Fit)</title>
+  <title>Flipbook (Desktop, Auto-Fit, Multiple Flipbooks)</title>
   <!-- jQuery (required for turn.js) -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <!-- Use your custom turn.js file -->
@@ -111,6 +111,7 @@
 </head>
 <body>
 
+  <!-- Top controls for flipbook navigation + zoom -->
   <div class="top-controls">
     <button id="prevPage">Previous</button>
     <button id="nextPage">Next</button>
@@ -120,6 +121,7 @@
     <button id="zoomIn">+</button>
   </div>
 
+  <!-- Flipbook container -->
   <div id="flipbook">
     <div class="flipbook-inner" id="flipbookInner"></div>
   </div>
@@ -134,24 +136,46 @@
   </footer>
 
   <script>
-    // Example array of images (double-page flipbook)
-    const imagePages = [
-      "images/page1.jpg",
-      "images/page2.jpg",
-      "images/page3.jpg"
-      // ...
-    ];
+    // 1) Define multiple flipbooks with their image arrays
+    // 4 pages for newsletter, 8 for pickleball
+    const flipbooks = {
+      newsletter: [
+        "https://raw.githubusercontent.com/JorShe57/Westlake-Flipbook/main/Newsletter%20March%20-%20April%20Draft_Page_1.jpg",
+        "https://raw.githubusercontent.com/JorShe57/Westlake-Flipbook/main/Newsletter%20March%20-%20April%20Draft_Page_2.jpg",
+        "https://raw.githubusercontent.com/JorShe57/Westlake-Flipbook/main/Newsletter%20March%20-%20April%20Draft_Page_3.jpg",
+        "https://raw.githubusercontent.com/JorShe57/Westlake-Flipbook/main/Newsletter%20March%20-%20April%20Draft_Page_4.jpg"
+      ],
+      pickleball: [
+        "https://raw.githubusercontent.com/JorShe57/Westlake-Flipbook/main/Tri-City%20Pickle%20Ball%20Courts_Page_1.jpg",
+        "https://raw.githubusercontent.com/JorShe57/Westlake-Flipbook/main/Tri-City%20Pickle%20Ball%20Courts_Page_2.jpg",
+        "https://raw.githubusercontent.com/JorShe57/Westlake-Flipbook/main/Tri-City%20Pickle%20Ball%20Courts_Page_3.jpg",
+        "https://raw.githubusercontent.com/JorShe57/Westlake-Flipbook/main/Tri-City%20Pickle%20Ball%20Courts_Page_4.jpg",
+        "https://raw.githubusercontent.com/JorShe57/Westlake-Flipbook/main/Tri-City%20Pickle%20Ball%20Courts_Page_5.jpg",
+        "https://raw.githubusercontent.com/JorShe57/Westlake-Flipbook/main/Tri-City%20Pickle%20Ball%20Courts_Page_6.jpg",
+        "https://raw.githubusercontent.com/JorShe57/Westlake-Flipbook/main/Tri-City%20Pickle%20Ball%20Courts_Page_7.jpg",
+        "https://raw.githubusercontent.com/JorShe57/Westlake-Flipbook/main/Tri-City%20Pickle%20Ball%20Courts_Page_8.jpg"
+      ]
+    };
 
+    // 2) Helper to read ?flipbook=someKey
+    function getQueryParam(param) {
+      const params = new URLSearchParams(window.location.search);
+      return params.get(param);
+    }
+
+    // Which flipbook are we loading?
+    const flipbookKey = getQueryParam("flipbook") || "newsletter";
+    const imagePages = flipbooks[flipbookKey] || [];
+
+    // 3) We'll do double-page
+    const displayMode = "double";
     let flipbookInitialized = false;
 
-    // We'll do container scale for manual zoom
+    // Container scale for manual zoom
     let baseScale = 1.0;
     const minScale = 0.5;
     const maxScale = 2.0;
     const scaleStep = 0.25;
-
-    // Double-page
-    const displayMode = "double";
 
     window.addEventListener("DOMContentLoaded", () => {
       loadImagesAndInitFlipbook();
@@ -168,39 +192,37 @@
         flipbookInitialized = false;
       }
 
-      const flipbookInner = document.getElementById("flipbookInner");
-
       if (!imagePages.length) {
-        console.error("No images to load");
+        console.error("No images found for flipbook key:", flipbookKey);
         return;
       }
 
-      // Measure first image to get aspect ratio
+      const flipbookInner = document.getElementById("flipbookInner");
+
+      // Measure first image to figure out aspect ratio
       const firstImg = new Image();
       firstImg.onload = function() {
         const pageWidth = firstImg.naturalWidth;
         const pageHeight = firstImg.naturalHeight;
 
-        // Double-page => total page width is 2 * pageWidth
+        // Double-page => total content width is 2 * pageWidth
         const contentWidth = (displayMode === "double") ? pageWidth * 2 : pageWidth;
         const contentHeight = pageHeight;
 
-        // Now compute the max allowed size (e.g. 90% of screen width, 80% of screen height)
+        // Compare to screen size (90% width, 80% height)
         const maxW = window.innerWidth * 0.9;
         const maxH = window.innerHeight * 0.8;
 
-        // The content's aspect ratio
         const contentAspect = contentWidth / contentHeight;
-        // The screen's aspect ratio
         const screenAspect = maxW / maxH;
 
         let finalWidth, finalHeight;
         if (contentAspect > screenAspect) {
-          // Content is relatively "wider" than screen
+          // content is "wider"
           finalWidth = maxW;
           finalHeight = maxW / contentAspect;
         } else {
-          // Content is relatively "taller"
+          // content is "taller"
           finalHeight = maxH;
           finalWidth = maxH * contentAspect;
         }
@@ -217,7 +239,10 @@
         for (let i = 0; i < imagePages.length; i++) {
           const pageDiv = document.createElement("div");
           pageDiv.className = "page";
-          pageDiv.style.width = (displayMode === "double") ? (finalWidth / 2) + "px" : finalWidth + "px";
+
+          // For double-page, each page is half the total width
+          const singlePageWidth = (displayMode === "double") ? finalWidth / 2 : finalWidth;
+          pageDiv.style.width = singlePageWidth + "px";
           pageDiv.style.height = finalHeight + "px";
 
           const img = document.createElement("img");
@@ -242,16 +267,15 @@
         updateZoomDisplay();
       };
 
-      // Trigger load
+      // Start loading
       firstImg.src = imagePages[0];
     }
 
     function applyScale(scale) {
-      // Just scale the container
       document.getElementById("flipbookInner").style.transform = `scale(${scale})`;
     }
 
-    // Zoom
+    // Zoom In/Out
     document.getElementById("zoomIn").addEventListener("click", () => {
       baseScale = Math.min(maxScale, baseScale + scaleStep);
       applyScale(baseScale);
