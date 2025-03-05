@@ -43,10 +43,11 @@
       return params.get(param);
     }
 
-    // Get the PDF link from the URL, or use a default if none is provided
-    const pdfUrl = getQueryParam("pdf") || "https://5il.co/39j6w"; // default to Tri-City if not specified
+    // Get the PDF filename from the 'pdf' query parameter
+    // Fallback to a default PDF if none is provided
+    const pdfUrl = getQueryParam("pdf") || "Tri-City%20Pickle%20Ball%20Courts.pdf";
 
-    // Configure PDF.js worker
+    // Configure PDF.js worker (ensure the version matches the one in the script tags)
     pdfjsLib.GlobalWorkerOptions.workerSrc =
       "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js";
 
