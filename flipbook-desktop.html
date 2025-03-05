@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Flipbook (Desktop, Auto-Fit, Multiple Flipbooks)</title>
+  <title>Flipbook (Desktop, Auto-Fit, Pan, Multiple Flipbooks)</title>
   <!-- jQuery (required for turn.js) -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <!-- Use your custom turn.js file -->
@@ -66,6 +66,7 @@
       left: 0; 
       top: 0;
       transform-origin: 0 0; /* pivot top-left for scale */
+      /* We'll do translate(panX, panY) scale(baseScale) for panning + zoom */
     }
     .page {
       position: absolute;
@@ -107,11 +108,16 @@
       background: #005fa3;
       transform: translateY(-2px);
     }
+
+    /* Pan Mode styling */
+    .pan-active #flipbook .flipbook-inner {
+      cursor: grab;
+    }
   </style>
 </head>
 <body>
 
-  <!-- Top controls for flipbook navigation + zoom -->
+  <!-- Top Controls -->
   <div class="top-controls">
     <button id="prevPage">Previous</button>
     <button id="nextPage">Next</button>
@@ -119,9 +125,11 @@
     <button id="zoomOut">-</button>
     <span class="zoom-level" id="zoomLevelDisplay">100</span><span>%</span>
     <button id="zoomIn">+</button>
+
+    <!-- Pan Mode Toggle -->
+    <button id="togglePan">Pan Mode: Off</button>
   </div>
 
-  <!-- Flipbook container -->
   <div id="flipbook">
     <div class="flipbook-inner" id="flipbookInner"></div>
   </div>
@@ -136,8 +144,7 @@
   </footer>
 
   <script>
-    // 1) Define multiple flipbooks with their image arrays
-    // 4 pages for newsletter, 8 for pickleball
+    // Dictionary of flipbooks
     const flipbooks = {
       newsletter: [
         "https://raw.githubusercontent.com/JorShe57/Westlake-Flipbook/main/Newsletter%20March%20-%20April%20Draft_Page_1.jpg",
@@ -157,28 +164,32 @@
       ]
     };
 
-    // 2) Helper to read ?flipbook=someKey
+    // Read ?flipbook=someKey
     function getQueryParam(param) {
       const params = new URLSearchParams(window.location.search);
       return params.get(param);
     }
-
-    // Which flipbook are we loading?
     const flipbookKey = getQueryParam("flipbook") || "newsletter";
     const imagePages = flipbooks[flipbookKey] || [];
 
-    // 3) We'll do double-page
+    // Double-page
     const displayMode = "double";
     let flipbookInitialized = false;
 
-    // Container scale for manual zoom
+    // Zoom + Pan
     let baseScale = 1.0;
     const minScale = 0.5;
     const maxScale = 2.0;
     const scaleStep = 0.25;
 
+    let panMode = false;
+    let isPanning = false;
+    let startX = 0, startY = 0;
+    let panX = 0, panY = 0;
+
     window.addEventListener("DOMContentLoaded", () => {
       loadImagesAndInitFlipbook();
+      setupEvents();
     });
 
     function loadImagesAndInitFlipbook() {
@@ -190,6 +201,9 @@
         }
         document.getElementById("flipbookInner").innerHTML = "";
         flipbookInitialized = false;
+        panX = 0; 
+        panY = 0;
+        applyTransform();
       }
 
       if (!imagePages.length) {
@@ -199,17 +213,17 @@
 
       const flipbookInner = document.getElementById("flipbookInner");
 
-      // Measure first image to figure out aspect ratio
+      // Measure first image to auto-fit
       const firstImg = new Image();
       firstImg.onload = function() {
         const pageWidth = firstImg.naturalWidth;
         const pageHeight = firstImg.naturalHeight;
 
-        // Double-page => total content width is 2 * pageWidth
+        // content width = 2 * pageWidth if double
         const contentWidth = (displayMode === "double") ? pageWidth * 2 : pageWidth;
         const contentHeight = pageHeight;
 
-        // Compare to screen size (90% width, 80% height)
+        // Compare to screen size
         const maxW = window.innerWidth * 0.9;
         const maxH = window.innerHeight * 0.8;
 
@@ -240,7 +254,7 @@
           const pageDiv = document.createElement("div");
           pageDiv.className = "page";
 
-          // For double-page, each page is half the total width
+          // each page is half width if double-page
           const singlePageWidth = (displayMode === "double") ? finalWidth / 2 : finalWidth;
           pageDiv.style.width = singlePageWidth + "px";
           pageDiv.style.height = finalHeight + "px";
@@ -267,42 +281,89 @@
         updateZoomDisplay();
       };
 
-      // Start loading
+      // Trigger load
       firstImg.src = imagePages[0];
     }
 
-    function applyScale(scale) {
-      document.getElementById("flipbookInner").style.transform = `scale(${scale})`;
+    function setupEvents() {
+      // Zoom events
+      document.getElementById("zoomIn").addEventListener("click", () => {
+        baseScale = Math.min(maxScale, baseScale + scaleStep);
+        applyTransform();
+        updateZoomDisplay();
+      });
+      document.getElementById("zoomOut").addEventListener("click", () => {
+        baseScale = Math.max(minScale, baseScale - scaleStep);
+        applyTransform();
+        updateZoomDisplay();
+      });
+
+      // Prev/Next
+      document.getElementById("prevPage").addEventListener("click", () => {
+        if (flipbookInitialized) {
+          $("#flipbookInner").turn("previous");
+        }
+      });
+      document.getElementById("nextPage").addEventListener("click", () => {
+        if (flipbookInitialized) {
+          $("#flipbookInner").turn("next");
+        }
+      });
+
+      // Pan Mode toggle
+      const togglePanBtn = document.getElementById("togglePan");
+      togglePanBtn.addEventListener("click", () => {
+        panMode = !panMode;
+        togglePanBtn.textContent = `Pan Mode: ${panMode ? "On" : "Off"}`;
+        if (panMode) {
+          document.body.classList.add("pan-active");
+        } else {
+          document.body.classList.remove("pan-active");
+          // reset pan
+          panX = 0; 
+          panY = 0;
+          applyTransform();
+        }
+      });
+
+      // Panning logic
+      const flipbookInner = document.getElementById("flipbookInner");
+      flipbookInner.addEventListener("mousedown", e => {
+        if (!panMode) return;
+        e.preventDefault();
+        isPanning = true;
+        startX = e.clientX - panX;
+        startY = e.clientY - panY;
+        flipbookInner.style.cursor = "grabbing";
+      });
+
+      document.addEventListener("mousemove", e => {
+        if (!isPanning) return;
+        panX = e.clientX - startX;
+        panY = e.clientY - startY;
+        applyTransform();
+      });
+
+      document.addEventListener("mouseup", () => {
+        isPanning = false;
+        if (panMode) {
+          flipbookInner.style.cursor = "grab";
+        } else {
+          flipbookInner.style.cursor = "default";
+        }
+      });
     }
 
-    // Zoom In/Out
-    document.getElementById("zoomIn").addEventListener("click", () => {
-      baseScale = Math.min(maxScale, baseScale + scaleStep);
-      applyScale(baseScale);
-      updateZoomDisplay();
-    });
-    document.getElementById("zoomOut").addEventListener("click", () => {
-      baseScale = Math.max(minScale, baseScale - scaleStep);
-      applyScale(baseScale);
-      updateZoomDisplay();
-    });
+    function applyTransform() {
+      // Combine panning + zoom
+      const flipbookInner = document.getElementById("flipbookInner");
+      flipbookInner.style.transform = `translate(${panX}px, ${panY}px) scale(${baseScale})`;
+    }
 
     function updateZoomDisplay() {
       const percent = Math.round(baseScale * 100);
       document.getElementById("zoomLevelDisplay").textContent = percent;
     }
-
-    // Prev/Next
-    document.getElementById("prevPage").addEventListener("click", () => {
-      if (flipbookInitialized) {
-        $("#flipbookInner").turn("previous");
-      }
-    });
-    document.getElementById("nextPage").addEventListener("click", () => {
-      if (flipbookInitialized) {
-        $("#flipbookInner").turn("next");
-      }
-    });
   </script>
 </body>
 </html>
