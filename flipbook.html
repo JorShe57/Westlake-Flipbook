@@ -114,12 +114,12 @@
       })
       .then(function(page) {
         // Base scale for page rendering
-        const baseScale = 1.5;
+        const baseScale = 3;
         const viewport = page.getViewport({ scale: baseScale });
         let pageWidth = viewport.width;
         let pageHeight = viewport.height;
 
-        dbg("Base page size (scale=1.5):", pageWidth, "x", pageHeight);
+        dbg("Base page size (scale=3):", pageWidth, "x", pageHeight);
 
         // If double-page, total width is 2 * pageWidth
         let totalWidth = (displayMode === "double") ? pageWidth * 2 : pageWidth;
@@ -189,7 +189,7 @@
     // Render a single page into a canvas
     function renderPage(pageNumber) {
   // Let's pick a baseScale of 2 for sharper text
-  const baseScale = 2;
+  const baseScale = 3;
 
   pdfDoc.getPage(pageNumber).then(function(page) {
     const devicePixelRatio = window.devicePixelRatio || 1;
