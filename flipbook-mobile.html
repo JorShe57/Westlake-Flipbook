@@ -2,14 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Flipbook (Mobile, Single-Page + Full Screen)</title>
+  <title>Flipbook (Mobile, Landscape Recommended)</title>
 
-  <!-- Make the page responsive on mobile -->
+  <!-- Responsive viewport -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 
-  <!-- jQuery (required for turn.js) -->
+  <!-- jQuery & turn.js -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <!-- Use your custom turn.js file -->
   <script src="turn.custom.js"></script>
 
   <style>
@@ -18,7 +17,7 @@
       box-sizing: border-box;
       margin: 0;
       padding: 0;
-      -webkit-tap-highlight-color: transparent; /* prevent tap highlight on mobile */
+      -webkit-tap-highlight-color: transparent;
     }
     body {
       background: #333;
@@ -29,17 +28,18 @@
       min-height: 100vh;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       overflow: hidden;
+      position: relative;
     }
 
-    /* Top controls: Home, Prev, Next, Zoom, Full Screen */
     .top-controls {
       display: flex;
       align-items: center;
       justify-content: space-evenly;
-      gap: 10px;
+      gap: 8px;
       margin: 10px 0;
       width: 100%;
       max-width: 500px;
+      z-index: 10;
     }
     .top-controls a.home-button {
       background: #007acc;
@@ -85,12 +85,13 @@
       background: #999;
       margin-bottom: 10px;
       overflow: hidden;
+      z-index: 1; /* So it appears above the orientation overlay if hidden */
     }
     .flipbook-inner {
       position: absolute;
-      left: 0; 
+      left: 0;
       top: 0;
-      transform-origin: 0 0; /* pivot top-left for scale */
+      transform-origin: 0 0;
     }
     .page {
       position: absolute;
@@ -98,7 +99,7 @@
       left: 0;
       background: #fff;
       overflow: hidden;
-      border-radius: 6px; /* slightly rounded corners on pages */
+      border-radius: 6px;
     }
     .page img {
       width: 100%;
@@ -107,14 +108,39 @@
       box-shadow: 0 2px 6px rgba(0,0,0,0.3);
     }
 
-    /* Optional extra space at bottom */
-    .footer-space {
-      height: 30px;
+    /* Pan Mode styling */
+    .pan-active #flipbook .flipbook-inner {
+      cursor: grab;
+    }
+
+    /* Overlay that appears if in portrait orientation */
+    .orientation-overlay {
+      position: fixed;
+      top: 0; left: 0;
       width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 20px;
+      z-index: 9999;
+      font-size: 1.2em;
+    }
+    .orientation-overlay p {
+      max-width: 300px;
+      line-height: 1.4;
     }
   </style>
 </head>
 <body>
+
+  <!-- Overlay that prompts user to rotate phone if in portrait -->
+  <div class="orientation-overlay" id="orientationOverlay" style="display: none;">
+    <p>Please rotate your phone to landscape for the best reading experience.</p>
+  </div>
 
   <!-- Top controls -->
   <div class="top-controls">
@@ -126,41 +152,70 @@
     <span class="zoom-level" id="zoomLevelDisplay">100</span><span>%</span>
     <button id="zoomIn">+</button>
 
-    <!-- Full Screen toggle -->
-    <button id="fullscreenBtn">Full Screen</button>
+    <!-- Pan Mode Toggle -->
+    <button id="togglePan">Pan Mode: Off</button>
   </div>
 
   <div id="flipbook">
     <div class="flipbook-inner" id="flipbookInner"></div>
   </div>
 
-  <div class="footer-space"></div>
-
   <script>
-    // Example array of images for single-page mobile flipbook
+    // Example images (single-page)
     const imagePages = [
       "images/mobile_page1.jpg",
       "images/mobile_page2.jpg"
-      // add more as needed
+      // ...
     ];
 
     let flipbookInitialized = false;
 
-    // Container scale for manual zoom
+    // Zoom & Pan
     let baseScale = 1.0;
     const minScale = 0.5;
-    const maxScale = 3.0;    // allow more zoom on mobile
+    const maxScale = 3.0;
     const scaleStep = 0.25;
 
-    // Single-page mode
+    // Single-page
     const displayMode = "single";
 
+    // Pan mode
+    let panMode = false;
+    let isPanning = false;
+    let startX = 0, startY = 0;
+    let panX = 0, panY = 0;
+
     window.addEventListener("DOMContentLoaded", () => {
+      checkOrientation();
       loadImagesAndInitFlipbook();
       setupEvents();
     });
 
+    // Listen for orientation changes (Android Chrome, some iOS versions)
+    window.addEventListener("orientationchange", () => {
+      checkOrientation();
+      // If we change orientation, we might want to re-fit the flipbook
+      // so let's reload the flipbook
+      setTimeout(() => {
+        loadImagesAndInitFlipbook();
+      }, 500); // small delay to let the orientation settle
+    });
+
+    function checkOrientation() {
+      // If user is in portrait, show overlay
+      // If user is in landscape, hide overlay
+      // We'll detect by comparing screen width & height or using window.orientation
+      const isPortrait = window.innerHeight > window.innerWidth;
+      const overlay = document.getElementById("orientationOverlay");
+      if (isPortrait) {
+        overlay.style.display = "flex";
+      } else {
+        overlay.style.display = "none";
+      }
+    }
+
     function loadImagesAndInitFlipbook() {
+      // Destroy old instance if needed
       if (flipbookInitialized) {
         try {
           $("#flipbookInner").turn("destroy");
@@ -169,6 +224,9 @@
         }
         document.getElementById("flipbookInner").innerHTML = "";
         flipbookInitialized = false;
+        panX = 0;
+        panY = 0;
+        applyTransform();
       }
 
       if (!imagePages.length) {
@@ -178,7 +236,7 @@
 
       const flipbookInner = document.getElementById("flipbookInner");
 
-      // We'll measure the first image to auto-fit
+      // Measure first image to auto-fit
       const firstImg = new Image();
       firstImg.onload = function() {
         const pageWidth = firstImg.naturalWidth;
@@ -188,30 +246,25 @@
         const contentWidth = pageWidth;
         const contentHeight = pageHeight;
 
-        // Available screen (slightly smaller than full to keep margins)
-        const maxW = window.innerWidth * 0.95;
-        const maxH = window.innerHeight * 0.75;
+        // We'll do 90% width, 80% height
+        const maxW = window.innerWidth * 0.9;
+        const maxH = window.innerHeight * 0.8;
 
-        // Aspect ratios
         const contentAspect = contentWidth / contentHeight;
         const screenAspect = maxW / maxH;
 
         let finalWidth, finalHeight;
         if (contentAspect > screenAspect) {
-          // content is "wider"
           finalWidth = maxW;
           finalHeight = maxW / contentAspect;
         } else {
-          // content is "taller"
           finalHeight = maxH;
           finalWidth = maxH * contentAspect;
         }
 
-        // Round to integer to avoid fractional pixel issues
         finalWidth = Math.round(finalWidth);
         finalHeight = Math.round(finalHeight);
 
-        // Set #flipbook size
         const flipbookDiv = document.getElementById("flipbook");
         flipbookDiv.style.width = finalWidth + "px";
         flipbookDiv.style.height = finalHeight + "px";
@@ -233,27 +286,21 @@
           flipbookInner.appendChild(pageDiv);
         }
 
-        // Initialize turn.js
+        // Init turn.js
         $("#flipbookInner").turn({
           width: finalWidth,
           height: finalHeight,
           autoCenter: true,
-          display: displayMode, // single-page
+          display: displayMode,
           elevation: 50,
           gradients: true,
-          duration: 800,  // slightly faster flip on mobile
-          when: {
-            turned: function(e, page) {
-              console.log("Page turned to:", page);
-            }
-          }
+          duration: 800
         });
 
         flipbookInitialized = true;
         updateZoomDisplay();
       };
 
-      // Start loading
       firstImg.src = imagePages[0];
     }
 
@@ -261,12 +308,12 @@
       // Zoom
       document.getElementById("zoomIn").addEventListener("click", () => {
         baseScale = Math.min(maxScale, baseScale + scaleStep);
-        applyScale(baseScale);
+        applyTransform();
         updateZoomDisplay();
       });
       document.getElementById("zoomOut").addEventListener("click", () => {
         baseScale = Math.max(minScale, baseScale - scaleStep);
-        applyScale(baseScale);
+        applyTransform();
         updateZoomDisplay();
       });
 
@@ -282,34 +329,58 @@
         }
       });
 
-      // Full Screen
-      const fullscreenBtn = document.getElementById("fullscreenBtn");
-      fullscreenBtn.addEventListener("click", toggleFullscreen);
+      // Pan Mode
+      const togglePanBtn = document.getElementById("togglePan");
+      togglePanBtn.addEventListener("click", () => {
+        panMode = !panMode;
+        togglePanBtn.textContent = `Pan Mode: ${panMode ? "On" : "Off"}`;
+        if (!panMode) {
+          panX = 0;
+          panY = 0;
+          applyTransform();
+          document.body.classList.remove("pan-active");
+        } else {
+          document.body.classList.add("pan-active");
+        }
+      });
+
+      // Panning logic
+      const flipbookInner = document.getElementById("flipbookInner");
+      flipbookInner.addEventListener("mousedown", e => {
+        if (!panMode) return;
+        e.preventDefault();
+        isPanning = true;
+        startX = e.clientX - panX;
+        startY = e.clientY - panY;
+        flipbookInner.style.cursor = "grabbing";
+      });
+
+      document.addEventListener("mousemove", e => {
+        if (!isPanning) return;
+        panX = e.clientX - startX;
+        panY = e.clientY - startY;
+        applyTransform();
+      });
+
+      document.addEventListener("mouseup", () => {
+        isPanning = false;
+        if (panMode) {
+          flipbookInner.style.cursor = "grab";
+        } else {
+          flipbookInner.style.cursor = "default";
+        }
+      });
     }
 
-    function applyScale(scale) {
-      // Just scale the container
-      document.getElementById("flipbookInner").style.transform = `scale(${scale})`;
+    function applyTransform() {
+      // Combine panning + zoom
+      const flipbookInner = document.getElementById("flipbookInner");
+      flipbookInner.style.transform = `translate(${panX}px, ${panY}px) scale(${baseScale})`;
     }
 
     function updateZoomDisplay() {
       const percent = Math.round(baseScale * 100);
       document.getElementById("zoomLevelDisplay").textContent = percent;
-    }
-
-    // Toggle Full Screen
-    function toggleFullscreen() {
-      // If not in fullscreen, request it
-      if (!document.fullscreenElement) {
-        // On mobile, the best we can do is request full screen
-        // iOS Safari may not support this well
-        document.documentElement.requestFullscreen().catch(err => {
-          console.warn("Fullscreen request failed:", err);
-        });
-      } else {
-        // If in fullscreen, exit
-        document.exitFullscreen();
-      }
     }
   </script>
 </body>
