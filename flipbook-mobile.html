@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Flipbook (Mobile, Single-Page)</title>
+  <title>Flipbook (Mobile, Single-Page + Full Screen)</title>
 
   <!-- Make the page responsive on mobile -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
@@ -31,7 +31,7 @@
       overflow: hidden;
     }
 
-    /* Top controls: Home, Prev, Next, Zoom */
+    /* Top controls: Home, Prev, Next, Zoom, Full Screen */
     .top-controls {
       display: flex;
       align-items: center;
@@ -125,6 +125,9 @@
     <button id="zoomOut">-</button>
     <span class="zoom-level" id="zoomLevelDisplay">100</span><span>%</span>
     <button id="zoomIn">+</button>
+
+    <!-- Full Screen toggle -->
+    <button id="fullscreenBtn">Full Screen</button>
   </div>
 
   <div id="flipbook">
@@ -278,6 +281,10 @@
           $("#flipbookInner").turn("next");
         }
       });
+
+      // Full Screen
+      const fullscreenBtn = document.getElementById("fullscreenBtn");
+      fullscreenBtn.addEventListener("click", toggleFullscreen);
     }
 
     function applyScale(scale) {
@@ -288,6 +295,21 @@
     function updateZoomDisplay() {
       const percent = Math.round(baseScale * 100);
       document.getElementById("zoomLevelDisplay").textContent = percent;
+    }
+
+    // Toggle Full Screen
+    function toggleFullscreen() {
+      // If not in fullscreen, request it
+      if (!document.fullscreenElement) {
+        // On mobile, the best we can do is request full screen
+        // iOS Safari may not support this well
+        document.documentElement.requestFullscreen().catch(err => {
+          console.warn("Fullscreen request failed:", err);
+        });
+      } else {
+        // If in fullscreen, exit
+        document.exitFullscreen();
+      }
     }
   </script>
 </body>
